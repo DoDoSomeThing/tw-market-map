@@ -57,6 +57,14 @@ tr:last-child td { border-bottom: none; }
 .hm-cell .c-pc { white-space: nowrap; opacity: .9; }
 
 .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--flat); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+.chip { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: .82rem; cursor: pointer; color: var(--fg); }
+.chip.active { border-color: var(--fg); background: #21262d; }
+.chip .g { color: var(--muted); font-size: .7rem; margin-right: 4px; }
+.streak { font-size: .7rem; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.streak.buy { background: rgba(248,81,73,.15); color: var(--up); }
+.streak.sell { background: rgba(63,185,80,.15); color: var(--down); }
+.topic-desc { color: var(--muted); font-size: .82rem; padding: 6px 2px; }
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (max-width: 700px) { .ranks { grid-template-columns: 1fr; } }
 footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1.6; }
@@ -68,6 +76,8 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
+<section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
+<section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
 
@@ -230,6 +240,79 @@ function pctColor(p) {
   }).join("");
 })();
 
+// ── 法人個股動向 ──
+function streakBadge(s) {
+  if (s > 1) return `<span class="streak buy">連買${s}</span>`;
+  if (s < -1) return `<span class="streak sell">連賣${-s}</span>`;
+  return "";
+}
+(function () {
+  const env = DATA.inst_rank, el = document.getElementById("instrank");
+  document.querySelector('[data-stamp="inst_rank"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">法人個股資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data;
+  function tbl(title, rows, who) {
+    if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
+    const body = rows.map((r, i) => {
+      const lots = who === "f" ? r.f_lots : r.t_lots;
+      const val = who === "f" ? r.f_value : r.t_value;
+      const stk = who === "f" ? r.f_streak : r.t_streak;
+      return `<tr><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span>${streakBadge(stk)}</td>
+        <td class="${cls(lots)}">${lots > 0 ? "+" : ""}${lots.toLocaleString()}</td>
+        <td class="${cls(val)}">${(Math.abs(val)/1e8).toFixed(1)}億</td>
+        <td>${r.close}</td></tr>`;
+    }).join("");
+    return `<div><table><tr><th>${title}</th><th>張數</th><th>估金額</th><th>收盤</th></tr>${body}</table></div>`;
+  }
+  el.innerHTML = `<div class="ranks">
+    ${tbl("外資買超 Top 15", d.foreign_buy, "f")}${tbl("外資賣超 Top 15", d.foreign_sell, "f")}
+    ${tbl("投信買超 Top 15", d.trust_buy, "t")}${tbl("投信賣超 Top 15", d.trust_sell, "t")}
+  </div>` + (d.n_history_days < 3 ? `<div class="sub" style="padding:4px 2px">連買/連賣天數需累積快照（目前 ${d.n_history_days} 日），數字會隨天數變準。</div>` : "");
+})();
+
+// ── 題材 ──
+(function () {
+  const env = DATA.topics_view;
+  const chipsEl = document.getElementById("topic-chips");
+  const detailEl = document.getElementById("topic-detail");
+  document.querySelector('[data-stamp="topics_view"]').innerHTML = stampFor(env);
+  if (!env.ok) { chipsEl.innerHTML = `<div class="err">題材資料失敗：${env.error || ""}</div>`; return; }
+  const topics = env.data.topics;
+  function show(id, push) {
+    const t = topics.find(x => x.id === id);
+    if (!t) { detailEl.innerHTML = ""; return; }
+    document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.id === id));
+    if (push) history.replaceState(null, "", "?topic=" + id);
+    const W = Math.min(detailEl.clientWidth || document.body.clientWidth, 1176);
+    const cells = t.members.map(m => ({ ...m, v: m.value })).filter(m => m.v > 0);
+    const h = Math.max(90, Math.min(240, Math.round(40 * Math.sqrt(cells.length))));
+    const out = [];
+    squarify(cells, 0, 0, W, h, out);
+    const boxes = out.map(c => {
+      const fs = Math.max(9, Math.min(15, Math.sqrt(c.w * c.h) / 6));
+      return `<div class="hm-cell" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
+        title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%">
+        <span class="c-nm">${c.name}</span>${c.h > 26 && c.w > 40 ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
+    }).join("");
+    const rows = t.members.map(m => `<tr>
+      <td>${m.name} <span class="sub">${m.code}</span></td>
+      <td class="${cls(m.pct)}">${sign(m.pct)}%</td><td>${m.close}</td>
+      <td class="sub">${(m.value/1e8).toFixed(1)}億</td>
+      <td class="${m.f_lots == null ? "sub" : cls(m.f_lots)}">${m.f_lots == null ? "—" : (m.f_lots > 0 ? "+" : "") + m.f_lots.toLocaleString()}${streakBadge(m.f_streak)}</td>
+      <td class="${m.t_lots == null ? "sub" : cls(m.t_lots)}">${m.t_lots == null ? "—" : (m.t_lots > 0 ? "+" : "") + m.t_lots.toLocaleString()}${streakBadge(m.t_streak)}</td>
+    </tr>`).join("");
+    detailEl.innerHTML = `<div class="topic-desc">${t.desc}　<span class="${cls(t.avg_pct)}">${sign(t.avg_pct)}%</span>・成交 ${(t.total_value/1e8).toFixed(0)} 億・${t.members.length} 檔</div>
+      <div class="hm-box" style="height:${h}px;margin-bottom:8px">${boxes}</div>
+      <table><tr><th>個股</th><th>漲跌</th><th>收盤</th><th>成交</th><th>外資(張)</th><th>投信(張)</th></tr>${rows}</table>`;
+  }
+  chipsEl.innerHTML = `<div class="chips">` + topics.map(t =>
+    `<button class="chip" data-id="${t.id}"><span class="g">${t.group}</span>${t.name} <span class="${cls(t.avg_pct)}">${sign(t.avg_pct)}%</span></button>`
+  ).join("") + `</div>`;
+  chipsEl.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => show(c.dataset.id, true)));
+  const q = new URLSearchParams(location.search).get("topic");
+  show(q && topics.some(t => t.id === q) ? q : topics[0].id, false);
+})();
+
 // ── 排行 ──
 (function () {
   const env = DATA.rank, el = document.getElementById("ranks");
@@ -257,7 +340,8 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 
 def main() -> None:
-    data = {name: read_json(name) for name in ("indices", "market", "heatmap", "rank")}
+    data = {name: read_json(name) for name in
+            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view")}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))

@@ -19,6 +19,17 @@ FETCH_INTERVAL = 3.0  # TWSE/TPEx 連續請求間隔秒數（防封 IP）
 _last_fetch = [0.0]
 
 
+def _curl_get_json(url: str, timeout: int):
+    """requests SSL 失敗時的備援（Mac LibreSSL 對 TPEx 部分節點憑證過度嚴格；curl 走系統信任鏈）。"""
+    import subprocess
+    r = subprocess.run(
+        ["curl", "-s", "--max-time", str(timeout), "-H", f"User-Agent: {UA['User-Agent']}", url],
+        capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout:
+        raise RuntimeError(f"curl exit={r.returncode}")
+    return json.loads(r.stdout)
+
+
 def http_get_json(url: str, *, timeout: int = 30, retries: int = 2):
     """帶間隔與重試的 GET，回 parsed JSON。失敗 raise。"""
     for attempt in range(retries + 1):
@@ -30,6 +41,9 @@ def http_get_json(url: str, *, timeout: int = 30, retries: int = 2):
             _last_fetch[0] = time.time()
             r.raise_for_status()
             return r.json()
+        except requests.exceptions.SSLError:
+            _last_fetch[0] = time.time()
+            return _curl_get_json(url, timeout)
         except Exception:
             if attempt >= retries:
                 raise
