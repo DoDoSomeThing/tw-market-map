@@ -1,8 +1,13 @@
-# fetch_daily_all.py — 全市場日行情（上市 STOCK_DAY_ALL + 上櫃 TPEx）+ 產業分類
+# fetch_daily_all.py — 全市場日行情（上市 MI_INDEX + 上櫃 TPEx）+ 產業分類
+# 上市主源=rwd MI_INDEX（收盤當晚 ~17:00 即有）；openapi STOCK_DAY_ALL 隔日早上才更新，僅當備援。
 from __future__ import annotations
+
+from datetime import date, timedelta
 
 from tw_common import http_get_json, parse_num, roc_to_iso, sanity_check_pct, write_error, write_json
 
+TWSE_MI_URL = ("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
+               "?response=json&date={d8}&type=ALLBUT0999")
 TWSE_ALL_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 TWSE_INDUSTRY_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
 TPEX_ALL_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
@@ -39,6 +44,58 @@ def fetch_industry_map() -> dict[str, str]:
             if code and ind:
                 m[code] = INDUSTRY_NAMES.get(ind, f"其他({ind})")
     return m
+
+
+def fetch_twse_mi() -> tuple[list[dict], str | None]:
+    """rwd MI_INDEX 每日收盤行情。往回試 5 個交易日；全失敗回 ([], None)。"""
+    for back in range(8):
+        d = date.today() - timedelta(days=back)
+        if d.weekday() >= 5:
+            continue
+        try:
+            j = http_get_json(TWSE_MI_URL.format(d8=d.strftime("%Y%m%d")))
+        except Exception:
+            continue
+        if j.get("stat") != "OK":
+            continue
+        table = None
+        for t in j.get("tables", []):
+            if "每日收盤行情" in t.get("title", ""):
+                table = t
+                break
+        if not table or not table.get("data"):
+            continue
+        idx = {name: i for i, name in enumerate(table["fields"])}
+        try:
+            c_code, c_name = idx["證券代號"], idx["證券名稱"]
+            c_val, c_close = idx["成交金額"], idx["收盤價"]
+            c_sign, c_diff = idx["漲跌(+/-)"], idx["漲跌價差"]
+        except KeyError:
+            return [], None  # 欄位改版 → 上層 fallback
+        out = []
+        for row in table["data"]:
+            close = parse_num(row[c_close])
+            diff = parse_num(row[c_diff])
+            if close is None or close <= 0 or diff is None:
+                continue
+            sign_html = str(row[c_sign])
+            change = diff if "+" in sign_html else -diff if "-" in sign_html else 0.0
+            prev = close - change
+            if prev <= 0:
+                continue
+            pct = change / prev * 100
+            if not sanity_check_pct(pct):
+                continue
+            out.append({
+                "code": str(row[c_code]).strip(),
+                "name": str(row[c_name]).strip(),
+                "close": close, "pct": round(pct, 2),
+                "value": parse_num(row[c_val]) or 0.0,
+                "market": "twse",
+            })
+        if out:
+            return out, d.isoformat()
+    return [], None
 
 
 def parse_twse(rows: list) -> tuple[list[dict], str | None]:
@@ -99,7 +156,10 @@ def main() -> None:
     errs: list[str] = []
 
     try:
-        twse_rows, d = parse_twse(http_get_json(TWSE_ALL_URL))
+        twse_rows, d = fetch_twse_mi()
+        if not twse_rows:  # MI_INDEX 全失敗才退 openapi（注意：openapi 可能是前一交易日）
+            twse_rows, d = parse_twse(http_get_json(TWSE_ALL_URL))
+            errs.append("上市改用 openapi 備援（可能非當日）")
         stocks += twse_rows
         if d:
             dates.append(d)
