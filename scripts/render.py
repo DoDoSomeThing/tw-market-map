@@ -64,6 +64,17 @@ tr:last-child td { border-bottom: none; }
 .streak { font-size: .7rem; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 .streak.buy { background: rgba(248,81,73,.15); color: var(--up); }
 .streak.sell { background: rgba(63,185,80,.15); color: var(--down); }
+.tag { font-size: .7rem; border-radius: 4px; padding: 1px 6px; margin-right: 6px; white-space: nowrap; }
+.tag.t澄清 { background: rgba(210,153,34,.18); color: var(--warn); }
+.tag.t自結 { background: rgba(88,166,255,.15); color: #58a6ff; }
+.tag.t財務 { background: rgba(188,140,255,.15); color: #bc8cff; }
+.tag.t治理 { background: rgba(139,148,158,.18); color: var(--muted); }
+.tag.t重大 { background: rgba(248,81,73,.15); color: var(--up); }
+.mops-list { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: .85rem; max-height: 420px; overflow-y: auto; }
+.mops-item { padding: 7px 10px; border-bottom: 1px solid var(--border); line-height: 1.5; }
+.mops-item:last-child { border-bottom: none; }
+.mops-item .who { color: var(--fg); font-weight: 600; margin-right: 6px; }
+.mops-item .tm { color: var(--muted); font-size: .75rem; margin-right: 6px; }
 .topic-desc { color: var(--muted); font-size: .82rem; padding: 6px 2px; }
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (max-width: 700px) { .ranks { grid-template-columns: 1fr; } }
@@ -77,12 +88,14 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
+<section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
 <section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
+<section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
 
 <footer>
-資料源：TWSE / TPEx 公開 API、yfinance。每交易日 17:30 後自動更新。<br>
+資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日 17:30 後自動更新。<br>
 鐵則：只做現況呈現，不做預測；各區塊資料日不一致或過期時顯示 ⚠️。
 </footer>
 
@@ -105,12 +118,12 @@ function tradingDayAge(iso) {
   }
   return age;
 }
-function stampFor(env) {
+function stampFor(env, maxStale = 2) {
   if (!env || !env.ok) return `<span class="stale">⚠️ 資料抓取失敗</span>`;
   const age = tradingDayAge(env.data_date);
   const mmdd = env.data_date ? env.data_date.slice(5).replace("-", "/") : "?";
   if (age === null) return `<span class="stale">⚠️ 資料日無法解析</span>`;
-  if (age > 2) return `<span class="stale">⚠️ 資料日 ${mmdd}（${age} 交易日前，可能過期）</span>`;
+  if (age > maxStale) return `<span class="stale">⚠️ 資料日 ${mmdd}（${age} 交易日前，可能過期）</span>`;
   return `資料日 ${mmdd}`;
 }
 function cls(p) { return p > 0 ? "up" : (p < 0 ? "down" : "flat"); }
@@ -332,6 +345,51 @@ function streakBadge(s) {
   </div><div class="sub" style="padding:4px 2px">排行門檻：日成交值 ≥ ${(d.min_trade_value/1e8).toFixed(0)} 億。</div>`;
 })();
 
+// ── 大戶動向（TDCC 週資料）──
+(function () {
+  const env = DATA.tdcc, el = document.getElementById("tdcc");
+  document.querySelector('[data-stamp="tdcc"]').innerHTML = stampFor(env, 7).replace("資料日", "資料週");
+  if (!env.ok) { el.innerHTML = `<div class="err">大戶資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data;
+  function pp(v) { return (v > 0 ? "+" : "") + v.toFixed(2); }
+  function tbl(title, rows) {
+    if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
+    const body = rows.map((r, i) => `<tr>
+      <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+      <td class="${cls(r.delta)}">${pp(r.delta)}</td>
+      <td>${r.r400.toFixed(2)}%</td><td class="sub">${r.r1000.toFixed(2)}%</td>
+      <td>${r.close ?? "—"}</td></tr>`).join("");
+    return `<div><table><tr><th>${title}</th><th>週增減(pp)</th><th>400張+持股比</th><th>千張+</th><th>收盤</th></tr>${body}</table></div>`;
+  }
+  if (d.inc.length || d.dec.length) {
+    el.innerHTML = `<div class="ranks">${tbl("大戶加碼 Top " + d.inc.length, d.inc)}${tbl("大戶減碼 Top " + d.dec.length, d.dec)}</div>
+      <div class="sub" style="padding:4px 2px">對照週：${d.prev_week ? d.prev_week.slice(5).replace("-","/") : "—"}｜門檻：日成交值 ≥ ${(d.min_trade_value/1e8).toFixed(1)} 億。</div>`;
+  } else if (d.top_r1000 && d.top_r1000.length) {
+    const body = d.top_r1000.map((r, i) => `<tr>
+      <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+      <td>${r.r1000.toFixed(2)}%</td><td>${r.r400.toFixed(2)}%</td><td>${r.close ?? "—"}</td></tr>`).join("");
+    el.innerHTML = `<table><tr><th>千張大戶持股比 Top 20</th><th>千張+</th><th>400張+</th><th>收盤</th></tr>${body}</table>
+      <div class="sub" style="padding:4px 2px">首週快照（尚無前週可比），下週起顯示加碼/減碼排行。</div>`;
+  } else {
+    el.innerHTML = `<div class="sub">無資料</div>`;
+  }
+})();
+
+// ── 重大訊息（MOPS）──
+(function () {
+  const env = DATA.mops, el = document.getElementById("mops");
+  document.querySelector('[data-stamp="mops"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">重大訊息抓取失敗：${env.error || ""}</div>`; return; }
+  const items = env.data.items || [];
+  if (!items.length) { el.innerHTML = `<div class="sub">今日無公告</div>`; return; }
+  const counts = env.data.tag_counts || {};
+  const chips = Object.entries(counts).map(([t, n]) => `<span class="tag t${t}">${t} ${n}</span>`).join("");
+  el.innerHTML = `<div style="padding:4px 0 8px">${chips}</div><div class="mops-list">` + items.map(it => {
+    const dd = it.date === env.data_date ? "" : it.date.slice(5).replace("-", "/") + " ";
+    return `<div class="mops-item"><span class="tag t${it.tag}">${it.tag}</span><span class="tm">${dd}${it.time}</span><span class="who">${it.name} <span class="sub">${it.code}</span></span>${it.subject}</div>`;
+  }).join("") + `</div>`;
+})();
+
 document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_AT;
 </script>
 </body>
@@ -341,7 +399,7 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 def main() -> None:
     data = {name: read_json(name) for name in
-            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view")}
+            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc")}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))

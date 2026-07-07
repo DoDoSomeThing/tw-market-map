@@ -10,6 +10,8 @@ SCRIPTS = [
     "fetch_market.py",
     "fetch_daily_all.py",
     "fetch_t86.py",
+    "fetch_mops.py",
+    "fetch_tdcc.py",
     "build_heatmap.py",
     "build_rank.py",
     "build_inst_rank.py",
