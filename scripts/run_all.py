@@ -17,6 +17,7 @@ SCRIPTS = [
     "build_inst_rank.py",
     "build_topics.py",
     "build_chains.py",
+    "build_flow.py",
     "render.py",
 ]
 

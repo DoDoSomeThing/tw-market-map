@@ -102,6 +102,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
 <section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
+<section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
@@ -297,6 +298,39 @@ function streakBadge(s) {
   </div>` + (d.n_history_days < 3 ? `<div class="sub" style="padding:4px 2px">連買/連賣天數需累積快照（目前 ${d.n_history_days} 日），數字會隨天數變準。</div>` : "");
 })();
 
+// ── 法人資金流 ──
+(function () {
+  const env = DATA.flow, el = document.getElementById("flow");
+  document.querySelector('[data-stamp="flow"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">資金流資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data;
+  function stk(s) {
+    if (s > 1) return `<span class="streak buy">連買${s}日</span>`;
+    if (s < -1) return `<span class="streak sell">連賣${-s}日</span>`;
+    return "";
+  }
+  function tbl(title, rows) {
+    if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
+    const body = rows.map(r => `<tr>
+      <td>${r.name} <span class="sub">${r.n}檔</span></td>
+      <td class="${cls(r.f_val)}">${sign(r.f_val)}億${stk(r.f_streak)}</td>
+      <td class="${cls(r.t_val)}">${sign(r.t_val)}億${stk(r.t_streak)}</td>
+      <td class="sub">${r.top.map(t => `${t.name}${sign(t.val)}`).join("、")}</td></tr>`).join("");
+    return `<div><table><tr><th>${title}</th><th>外資</th><th>投信</th><th>主要個股(億)</th></tr>${body}</table></div>`;
+  }
+  const K = 8;
+  function split(arr) {
+    const inflow = arr.filter(r => r.f_val > 0).slice(0, K);
+    const outflow = arr.filter(r => r.f_val < 0).slice(-K).reverse();
+    return { inflow, outflow };
+  }
+  const ind = split(d.industries), top = split(d.topics);
+  el.innerHTML = `<div class="ranks">
+    ${tbl("產業流入（全市場）", ind.inflow)}${tbl("產業流出（全市場）", ind.outflow)}
+    ${tbl("題材流入（自選）", top.inflow)}${tbl("題材流出（自選）", top.outflow)}
+  </div>` + (d.n_history_days < 3 ? `<div class="sub" style="padding:4px 2px">連買/連賣天數需累積快照（目前 ${d.n_history_days} 日），數字會隨天數變準。</div>` : "");
+})();
+
 // ── 題材 ──
 (function () {
   const env = DATA.topics_view;
@@ -450,7 +484,7 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 def main() -> None:
     data = {name: read_json(name) for name in
-            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc", "chains_view")}
+            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc", "chains_view", "flow")}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))
