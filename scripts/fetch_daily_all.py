@@ -132,7 +132,18 @@ def parse_tpex(rows: list) -> tuple[list[dict], str | None]:
         close = parse_num(r.get("Close"))
         change = parse_num(r.get("Change"))
         value = parse_num(r.get("TransactionAmount"))
-        if close is None or change is None or close <= 0:
+        if close is None or close <= 0:
+            continue
+        rec = {
+            "code": str(r.get("SecuritiesCompanyCode", "")).strip(),
+            "name": str(r.get("CompanyName", "")).strip(),
+            "close": close, "value": value or 0.0, "market": "tpex",
+        }
+        if change is None:
+            # 除權息日 Change 欄是文字（「除息」「除權」）：漲跌無前日可比 → pct 掛 0 並標記，
+            # 個股才不會整天從熱力圖/排行/題材消失（世界先進 2026-07-06 除息踩到）
+            if "除" in str(r.get("Change", "")):
+                out.append({**rec, "pct": 0.0, "ex_div": True})
             continue
         prev = close - change
         if prev <= 0:
@@ -140,13 +151,7 @@ def parse_tpex(rows: list) -> tuple[list[dict], str | None]:
         pct = change / prev * 100
         if not sanity_check_pct(pct):
             continue
-        out.append({
-            "code": str(r.get("SecuritiesCompanyCode", "")).strip(),
-            "name": str(r.get("CompanyName", "")).strip(),
-            "close": close, "pct": round(pct, 2),
-            "value": value or 0.0,
-            "market": "tpex",
-        })
+        out.append({**rec, "pct": round(pct, 2)})
     return out, data_date
 
 

@@ -75,6 +75,19 @@ tr:last-child td { border-bottom: none; }
 .mops-item:last-child { border-bottom: none; }
 .mops-item .who { color: var(--fg); font-weight: 600; margin-right: 6px; }
 .mops-item .tm { color: var(--muted); font-size: .75rem; margin-right: 6px; }
+
+/* 價值鏈 */
+.stage { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+.stage-title { font-size: .95rem; font-weight: 700; padding-bottom: 8px; }
+.nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.node { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.node-label { font-weight: 600; font-size: .88rem; }
+.node-desc { color: var(--muted); font-size: .75rem; padding: 2px 0 6px; line-height: 1.4; }
+.co { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; border-top: 1px solid var(--border); padding: 6px 2px; cursor: pointer; }
+.co:hover { background: #1c2129; }
+.co .co-nm { font-weight: 600; font-size: .85rem; }
+.co .co-px { margin-left: auto; font-size: .85rem; white-space: nowrap; }
+.co .tag { margin-right: 0; }
 .topic-desc { color: var(--muted); font-size: .82rem; padding: 6px 2px; }
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (max-width: 700px) { .ranks { grid-template-columns: 1fr; } }
@@ -92,6 +105,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
+<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 kanpan 面板（需本機後端）</div><div id="chain-chips"></div><div id="chains"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
 
 <footer>
@@ -295,7 +309,7 @@ function streakBadge(s) {
     const t = topics.find(x => x.id === id);
     if (!t) { detailEl.innerHTML = ""; return; }
     document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.id === id));
-    if (push) history.replaceState(null, "", "?topic=" + id);
+    if (push) { const p = new URLSearchParams(location.search); p.set("topic", id); history.replaceState(null, "", "?" + p); }
     const W = Math.min(detailEl.clientWidth || document.body.clientWidth, 1176);
     const cells = t.members.map(m => ({ ...m, v: m.value })).filter(m => m.v > 0);
     const h = Math.max(90, Math.min(240, Math.round(40 * Math.sqrt(cells.length))));
@@ -375,6 +389,43 @@ function streakBadge(s) {
   }
 })();
 
+// ── 產業價值鏈 ──
+(function () {
+  const env = DATA.chains_view;
+  const chipsEl = document.getElementById("chain-chips");
+  const el = document.getElementById("chains");
+  document.querySelector('[data-stamp="chains_view"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">價值鏈資料失敗：${env.error || ""}</div>`; return; }
+  const chains = env.data.chains;
+  function lotsTag(who, lots) {
+    if (lots == null || lots === 0) return "";
+    const buy = lots > 0;
+    return `<span class="tag ${buy ? "t重大" : "t治理"}" style="color:${buy ? "var(--up)" : "var(--down)"}">${who}${buy ? "買" : "賣"}${Math.abs(lots).toLocaleString()}張</span>`;
+  }
+  function show(id, push) {
+    const ch = chains.find(c => c.id === id);
+    if (!ch) { el.innerHTML = ""; return; }
+    chipsEl.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.id === id));
+    if (push) { const p = new URLSearchParams(location.search); p.set("chain", id); history.replaceState(null, "", "?" + p); }
+    el.innerHTML = `<div class="topic-desc">${ch.desc}</div>` + ch.stages.map(st => `
+      <div class="stage"><div class="stage-title">${st.name}</div><div class="nodes">` +
+      st.nodes.map(nd => `<div class="node"><div class="node-label">${nd.label} <span class="sub">${nd.members.length} 檔</span></div>
+        <div class="node-desc">${nd.desc}</div>` +
+        nd.members.map(m => `<div class="co" data-code="${m.code}" title="開 kanpan 面板（需本機後端 127.0.0.1:8771）">
+          <span class="co-nm">${m.name} <span class="sub">${m.code}</span></span>
+          ${lotsTag("外資", m.f_lots)}${lotsTag("投信", m.t_lots)}
+          <span class="co-px ${cls(m.pct)}">${m.close} (${sign(m.pct)}%)</span></div>`).join("") +
+        `</div>`).join("") + `</div></div>`).join("");
+    el.querySelectorAll(".co").forEach(c => c.addEventListener("click", () =>
+      window.open("http://127.0.0.1:8771/?sid=" + c.dataset.code, "_blank")));
+  }
+  chipsEl.innerHTML = `<div class="chips">` + chains.map(c =>
+    `<button class="chip" data-id="${c.id}">${c.name}</button>`).join("") + `</div>`;
+  chipsEl.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => show(c.dataset.id, true)));
+  const q = new URLSearchParams(location.search).get("chain");
+  show(q && chains.some(c => c.id === q) ? q : chains[0].id, false);
+})();
+
 // ── 重大訊息（MOPS）──
 (function () {
   const env = DATA.mops, el = document.getElementById("mops");
@@ -399,7 +450,7 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 def main() -> None:
     data = {name: read_json(name) for name in
-            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc")}
+            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc", "chains_view")}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))
