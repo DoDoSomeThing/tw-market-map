@@ -106,7 +106,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
-<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 kanpan 面板（需本機後端）</div><div id="chain-chips"></div><div id="chains"></div></section>
+<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁（裝 kanpan 擴充會自動掛面板）</div><div id="chain-chips"></div><div id="chains"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
 
 <footer>
@@ -445,13 +445,13 @@ function streakBadge(s) {
       <div class="stage"><div class="stage-title">${st.name}</div><div class="nodes">` +
       st.nodes.map(nd => `<div class="node"><div class="node-label">${nd.label} <span class="sub">${nd.members.length} 檔</span></div>
         <div class="node-desc">${nd.desc}</div>` +
-        nd.members.map(m => `<div class="co" data-code="${m.code}" title="開 kanpan 面板（需本機後端 127.0.0.1:8771）">
+        nd.members.map(m => `<div class="co" data-code="${m.code}" data-mkt="${m.market || "twse"}" title="開 Yahoo 股市 ${m.code}（kanpan 擴充自動掛面板）">
           <span class="co-nm">${m.name} <span class="sub">${m.code}</span></span>
           ${lotsTag("外資", m.f_lots)}${lotsTag("投信", m.t_lots)}
           <span class="co-px ${cls(m.pct)}">${m.close} (${sign(m.pct)}%)</span></div>`).join("") +
         `</div>`).join("") + `</div></div>`).join("");
     el.querySelectorAll(".co").forEach(c => c.addEventListener("click", () =>
-      window.open("http://127.0.0.1:8771/?sid=" + c.dataset.code, "_blank")));
+      window.open(`https://tw.stock.yahoo.com/quote/${c.dataset.code}.${c.dataset.mkt === "tpex" ? "TWO" : "TW"}`, "_blank")));
   }
   chipsEl.innerHTML = `<div class="chips">` + chains.map(c =>
     `<button class="chip" data-id="${c.id}">${c.name}</button>`).join("") + `</div>`;

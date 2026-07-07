@@ -43,6 +43,7 @@ def main() -> None:
                     members.append({
                         "code": code, "name": s["name"], "close": s["close"],
                         "pct": s["pct"], "value": s["value"],
+                        "market": s.get("market"),   # twse/tpex → Yahoo .TW/.TWO
                         "f_lots": round(iv["f"] / 1000) if iv else None,
                         "t_lots": round(iv["t"] / 1000) if iv else None,
                     })

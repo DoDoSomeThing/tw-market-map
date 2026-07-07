@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from tw_common import http_get_json, roc_to_iso, write_error, write_json
+from tw_common import http_get_json, read_json, roc_to_iso, write_error, write_json
 
 TWSE_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap04_L"
 TPEX_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O"
@@ -100,6 +100,13 @@ def main() -> None:
     items = [it for it in items if it["date"] in keep]
     items.sort(key=lambda it: (it["date"], it["time"]), reverse=True)
     items = items[:MAX_ITEMS]
+
+    # 防倒退：TWSE openapi 對海外 IP（GitHub Actions）偶爾回滯後快取。
+    # 新抓的 data_date 比手上這份還舊 → 保留舊檔，別拿過期資料蓋掉較新的。
+    prev = read_json("mops")
+    if prev.get("ok") and prev.get("data_date") and prev["data_date"] > dates[0]:
+        print(f"[SKIP] openapi 回滯後資料（{dates[0]} < 既有 {prev['data_date']}），保留既有檔")
+        return
 
     tags = {}
     for it in items:
