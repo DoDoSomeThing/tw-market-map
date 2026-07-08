@@ -107,7 +107,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
 <section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁（裝 kanpan 擴充會自動掛面板）</div><div id="chain-chips"></div><div id="chains"></div></section>
+<section id="sec-fund"><h2>基本面速覽 <span class="stamp" data-stamp="fundamentals"></span></h2><div class="sub">季報（TWSE/TPEx openapi）｜殖利率=已公告現金股利÷現價，僅上市（上櫃股利端點無資料）｜排行門檻：日成交值 ≥ 0.5 億</div><div id="fund"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
+<section id="sec-news"><h2>市場新聞 <span class="stamp" data-stamp="news"></span></h2><div class="sub">鉅亨網 + Yahoo 股市 RSS 標題聚合｜內文請點標題回原站｜標籤為標題關鍵字自動比對</div><div id="news"></div></section>
 
 <footer>
 資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日 17:30 後自動更新。<br>
@@ -355,7 +357,7 @@ function streakBadge(s) {
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%">
         <span class="c-nm">${c.name}</span>${c.h > 26 && c.w > 40 ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
-    const rows = t.members.map(m => `<tr>
+    const rows = t.members.map(m => `<tr title="${fundLine(m.code)}">
       <td>${m.name} <span class="sub">${m.code}</span></td>
       <td class="${cls(m.pct)}">${sign(m.pct)}%</td><td>${m.close}</td>
       <td class="sub">${(m.value/1e8).toFixed(1)}億</td>
@@ -445,7 +447,7 @@ function streakBadge(s) {
       <div class="stage"><div class="stage-title">${st.name}</div><div class="nodes">` +
       st.nodes.map(nd => `<div class="node"><div class="node-label">${nd.label} <span class="sub">${nd.members.length} 檔</span></div>
         <div class="node-desc">${nd.desc}</div>` +
-        nd.members.map(m => `<div class="co" data-code="${m.code}" data-mkt="${m.market || "twse"}" title="開 Yahoo 股市 ${m.code}（kanpan 擴充自動掛面板）">
+        nd.members.map(m => `<div class="co" data-code="${m.code}" data-mkt="${m.market || "twse"}" title="開 Yahoo 股市 ${m.code}（kanpan 擴充自動掛面板）${fundLine(m.code) ? "&#10;" + fundLine(m.code) : ""}">
           <span class="co-nm">${m.name} <span class="sub">${m.code}</span></span>
           ${lotsTag("外資", m.f_lots)}${lotsTag("投信", m.t_lots)}
           <span class="co-px ${cls(m.pct)}">${m.close} (${sign(m.pct)}%)</span></div>`).join("") +
@@ -475,6 +477,53 @@ function streakBadge(s) {
   }).join("") + `</div>`;
 })();
 
+// ── 基本面速覽 ──
+function fundLine(code) {
+  const env = DATA.fundamentals;
+  const f = env && env.ok ? env.data.stocks[code] : null;
+  if (!f) return "";
+  const p = [];
+  if (f.eps != null) p.push(`EPS ${f.eps}`);
+  if (f.gm != null) p.push(`毛利 ${f.gm}%`);
+  if (f.om != null) p.push(`營益 ${f.om}%`);
+  if (f.yield_pct != null) p.push(`殖利率 ${f.yield_pct}%`);
+  if (f.debt_pct != null) p.push(`負債比 ${f.debt_pct}%`);
+  return p.length ? `${p.join("｜")}（${f.yq}）` : "";
+}
+(function () {
+  const env = DATA.fundamentals, el = document.getElementById("fund");
+  document.querySelector('[data-stamp="fundamentals"]').innerHTML = stampFor(env, 95).replace("資料日", "出表日");
+  if (!env.ok) { el.innerHTML = `<div class="err">基本面資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data;
+  function tbl(title, rows, fmt) {
+    if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
+    const body = rows.map((r, i) => `<tr>
+      <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+      ${fmt(r)}<td>${r.close ?? "—"}</td></tr>`).join("");
+    return `<div><table><tr><th>${title}</th>${title.includes("殖利率") ? "<th>殖利率</th><th>現金股利</th>" : "<th>毛利率</th><th>EPS</th>"}<th>收盤</th></tr>${body}</table></div>`;
+  }
+  el.innerHTML = `<div class="grid2">
+    ${tbl("高殖利率 Top 15", d.top_yield, r => `<td>${r.yield_pct}%</td><td class="sub">${r.div_cash} 元</td>`)}
+    ${tbl("高毛利率 Top 15", d.top_margin, r => `<td>${r.gm}%</td><td class="sub">${r.eps ?? "—"}</td>`)}
+  </div><div class="sub" style="padding:4px 2px">殖利率以「已公告股利年度合計 ÷ 現價」估算，未必等於未來配息；高毛利榜含 IP/投資控股類（毛利結構特殊）。</div>`;
+})();
+
+// ── 市場新聞 ──
+(function () {
+  const env = DATA.news, el = document.getElementById("news");
+  document.querySelector('[data-stamp="news"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">新聞抓取失敗：${env.error || ""}</div>`; return; }
+  const items = env.data.items || [];
+  if (!items.length) { el.innerHTML = `<div class="sub">無新聞</div>`; return; }
+  el.innerHTML = `<div class="mops-list">` + items.map(it => {
+    const tags = (it.topics || []).map(t => `<span class="tag t財務">${t}</span>`).join("")
+               + (it.stocks || []).map(s => `<span class="tag t治理">${s}</span>`).join("");
+    return `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
+      <span class="tag t自結">${it.source}</span>${tags}
+      <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`;
+  }).join("") + `</div>`;
+})();
+
 document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_AT;
 </script>
 </body>
@@ -484,7 +533,22 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 def main() -> None:
     data = {name: read_json(name) for name in
-            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops", "tdcc", "chains_view", "flow")}
+            ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
+             "tdcc", "chains_view", "flow", "fundamentals", "news")}
+
+    # 基本面全量 ~2000 檔會撐爆頁面 → 只內嵌「題材+價值鏈成員」子集（tooltip 用），排行表本身已在信封裡
+    fund = data["fundamentals"]
+    if fund.get("ok"):
+        need: set[str] = set()
+        if data["topics_view"].get("ok"):
+            for t in data["topics_view"]["data"].get("topics", []):
+                need.update(m["code"] for m in t.get("members", []))
+        if data["chains_view"].get("ok"):
+            for ch in data["chains_view"]["data"].get("chains", []):
+                for st in ch.get("stages", []):
+                    for nd in st.get("nodes", []):
+                        need.update(m["code"] for m in nd.get("members", []))
+        fund["data"]["stocks"] = {c: f for c, f in fund["data"]["stocks"].items() if c in need}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))
