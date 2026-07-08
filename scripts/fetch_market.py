@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from tw_common import http_get_json, parse_num, roc_to_iso, write_error, write_json, ymd_to_iso
+from tw_common import (data_age_days, http_get_json, parse_num, read_json, roc_to_iso,
+                       write_error, write_json, ymd_to_iso)
 
 BFI82U_URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json"
 MARGN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?selectType=MS&response=json"
@@ -66,8 +67,9 @@ def fetch_tpex_inst() -> dict | None:
 
 
 def fetch_margin() -> dict | None:
-    """信用交易統計（上市整體）。TWSE 註明餘額以「前日餘額」為準。"""
-    j = http_get_json(MARGN_URL)
+    """信用交易統計（上市整體）。TWSE 註明餘額以「前日餘額」為準。
+    rwd 端點對 GitHub Actions 偶爾很慢（2026-07-08 三次 30s 全逾時）→ timeout 拉 60。"""
+    j = http_get_json(MARGN_URL, timeout=60)
     if j.get("stat") != "OK":
         return None
     table = None
@@ -110,6 +112,15 @@ def main() -> None:
     except Exception as e:
         margin = None
         margin_err = str(e)
+
+    if margin is None:
+        # 沿用前次資券（≤2 交易日），render 端用 margin.date 標舊資料日,不裝新鮮
+        prev = read_json("market")
+        prev_margin = (prev.get("data") or {}).get("margin") if prev.get("ok") else None
+        if prev_margin and data_age_days(prev_margin.get("date", "")) is not None \
+                and data_age_days(prev_margin["date"]) <= 2:
+            margin = prev_margin
+            margin_err = f"本次抓取失敗，沿用 {prev_margin['date']} 資料（{margin_err}）"
 
     if not twse and not margin:
         write_error("market", "TWSE BFI82U+MI_MARGN",

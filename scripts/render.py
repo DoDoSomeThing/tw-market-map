@@ -266,7 +266,7 @@ function yi(v) { return v == null ? "—" : (v / 1e8).toFixed(1); } // 元 → �
       <td class="${cls(chg || 0)}">${chg == null ? "—" : sign(chg)}</td></tr>
       ${su ? `<tr><td>融券(張)</td><td>${su.prev_bal?.toLocaleString() ?? "—"}</td><td>${su.today_bal?.toLocaleString() ?? "—"}</td>
       <td>${su.today_bal != null && su.prev_bal != null ? sign(su.today_bal - su.prev_bal).replace(".00","") : "—"}</td></tr>` : ""}
-      </table><div class="sub" style="padding:4px 2px">TWSE 註：餘額以「前日餘額」欄為準。</div></div>`;
+      </table><div class="sub" style="padding:4px 2px">TWSE 註：餘額以「前日餘額」欄為準。${d.margin.date && env.data_date && d.margin.date !== env.data_date ? `<span class="stale">⚠️ 資券為 ${d.margin.date.slice(5).replace("-","/")} 資料（本次抓取失敗沿用）</span>` : ""}</div></div>`;
   } else {
     marginHtml = `<div class="err">資券抓取失敗</div>`;
   }
