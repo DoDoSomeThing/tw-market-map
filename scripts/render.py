@@ -15,15 +15,30 @@ TEMPLATE = """<!DOCTYPE html>
 <title>台股產業地圖</title>
 <style>
 :root {
-  --bg: #0d1117; --panel: #161b22; --border: #30363d;
-  --fg: #e6edf3; --muted: #8b949e;
-  --up: #f85149; --down: #3fb950; --flat: #8b949e; /* 台股紅漲綠跌 */
-  --warn: #d29922;
+  --bg: #05070d; --panel: #0d1524; --border: #1e2c45;
+  --fg: #e6edf3; --muted: #7d8aa0;
+  --up: #fb2c36; --down: #00bb7f; --flat: #7d8aa0; /* 台股紅漲綠跌 */
+  --warn: #f99c00; --accent: #3b82f6;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--fg); font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; padding: 12px; max-width: 1200px; margin: 0 auto; }
-h1 { font-size: 1.3rem; padding: 8px 0; }
+body { background: var(--bg); color: var(--fg); font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 0 auto;
+  background-image: linear-gradient(90deg, #3b82f60d 1px, transparent 0), linear-gradient(#3b82f60d 1px, transparent 0);
+  background-size: 42px 42px; }
+h1 { font-size: 1.15rem; }
 h2 { font-size: 1.05rem; padding: 14px 0 8px; color: var(--fg); }
+
+/* 頂部導覽 + 分頁 */
+header.top { position: sticky; top: 0; z-index: 50; background: rgba(5,7,13,.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+.top-inner { max-width: 1200px; margin: 0 auto; padding: 10px 12px 0; }
+.brand { display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { background: none; border: none; color: var(--muted); font-size: .92rem; padding: 9px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; font-family: inherit; }
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
+.tabpane { display: none; }
+.tabpane.active { display: block; }
 .sub { color: var(--muted); font-size: .78rem; }
 .stamp { color: var(--muted); font-size: .75rem; margin-left: 8px; }
 .stale { color: var(--warn); font-weight: 600; }
@@ -95,26 +110,58 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 </style>
 </head>
 <body>
-<h1>台股產業地圖 <span class="sub">自用・現況呈現・不預測</span></h1>
-<div class="sub" id="built-at"></div>
+<header class="top"><div class="top-inner">
+  <div class="brand"><h1>台股產業地圖</h1><span class="sub">自用・現況呈現・不預測</span><span class="sub" id="built-at" style="margin-left:auto"></span></div>
+  <nav class="tabs" id="tabs">
+    <button class="tab" data-pane="focus">每日焦點</button>
+    <button class="tab" data-pane="topics">題材</button>
+    <button class="tab" data-pane="chains">產業鏈</button>
+    <button class="tab" data-pane="market">市場熱力</button>
+    <button class="tab" data-pane="watch">觀測站</button>
+    <button class="tab" data-pane="fund">基本面</button>
+    <button class="tab" data-pane="news">新聞</button>
+  </nav>
+</div></header>
+<main>
 
+<div class="tabpane" id="pane-focus">
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
-<section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
-<section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
+<section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
+</div>
+
+<div class="tabpane" id="pane-topics">
 <section id="sec-topics"><h2>題材 <span class="stamp" data-stamp="topics_view"></span></h2><div class="sub">題材對照為 AI 初稿+人工校對，非官方分類</div><div id="topic-chips"></div><div id="topic-detail"></div></section>
+</div>
+
+<div class="tabpane" id="pane-chains">
+<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁（裝 kanpan 擴充會自動掛面板）</div><div id="chain-chips"></div><div id="chains"></div></section>
+</div>
+
+<div class="tabpane" id="pane-market">
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span></h2><div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔</div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
-<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁（裝 kanpan 擴充會自動掛面板）</div><div id="chain-chips"></div><div id="chains"></div></section>
-<section id="sec-fund"><h2>基本面速覽 <span class="stamp" data-stamp="fundamentals"></span></h2><div class="sub">季報（TWSE/TPEx openapi）｜殖利率=已公告現金股利÷現價，僅上市（上櫃股利端點無資料）｜排行門檻：日成交值 ≥ 0.5 億</div><div id="fund"></div></section>
+</div>
+
+<div class="tabpane" id="pane-watch">
+<section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
+</div>
+
+<div class="tabpane" id="pane-fund">
+<section id="sec-fund"><h2>基本面速覽 <span class="stamp" data-stamp="fundamentals"></span></h2><div class="sub">季報（TWSE/TPEx openapi）｜殖利率=已公告現金股利÷現價，僅上市（上櫃股利端點無資料）｜排行門檻：日成交值 ≥ 0.5 億</div><div id="fund"></div></section>
+</div>
+
+<div class="tabpane" id="pane-news">
 <section id="sec-news"><h2>市場新聞 <span class="stamp" data-stamp="news"></span></h2><div class="sub">鉅亨網 + Yahoo 股市 RSS 標題聚合｜內文請點標題回原站｜標籤為標題關鍵字自動比對</div><div id="news"></div></section>
+</div>
 
 <footer>
 資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日 17:30 後自動更新。<br>
 鐵則：只做現況呈現，不做預測；各區塊資料日不一致或過期時顯示 ⚠️。
 </footer>
+</main>
 
 <script>
 const DATA = __DATA__;
@@ -345,7 +392,7 @@ function streakBadge(s) {
     const t = topics.find(x => x.id === id);
     if (!t) { detailEl.innerHTML = ""; return; }
     document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.id === id));
-    if (push) { const p = new URLSearchParams(location.search); p.set("topic", id); history.replaceState(null, "", "?" + p); }
+    if (push) { const p = new URLSearchParams(location.search); p.set("topic", id); history.replaceState(null, "", "?" + p + location.hash); }
     const W = Math.min(detailEl.clientWidth || document.body.clientWidth, 1176);
     const cells = t.members.map(m => ({ ...m, v: m.value })).filter(m => m.v > 0);
     const h = Math.max(90, Math.min(240, Math.round(40 * Math.sqrt(cells.length))));
@@ -442,7 +489,7 @@ function streakBadge(s) {
     const ch = chains.find(c => c.id === id);
     if (!ch) { el.innerHTML = ""; return; }
     chipsEl.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.id === id));
-    if (push) { const p = new URLSearchParams(location.search); p.set("chain", id); history.replaceState(null, "", "?" + p); }
+    if (push) { const p = new URLSearchParams(location.search); p.set("chain", id); history.replaceState(null, "", "?" + p + location.hash); }
     el.innerHTML = `<div class="topic-desc">${ch.desc}</div>` + ch.stages.map(st => `
       <div class="stage"><div class="stage-title">${st.name}</div><div class="nodes">` +
       st.nodes.map(nd => `<div class="node"><div class="node-label">${nd.label} <span class="sub">${nd.members.length} 檔</span></div>
@@ -522,6 +569,23 @@ function fundLine(code) {
       <span class="tag t自結">${it.source}</span>${tags}
       <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`;
   }).join("") + `</div>`;
+})();
+
+// ── 分頁切換 ──
+(function () {
+  const PANES = ["focus", "topics", "chains", "market", "watch", "fund", "news"];
+  function show(id, push) {
+    if (!PANES.includes(id)) id = "focus";
+    document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "pane-" + id));
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.pane === id));
+    if (push) history.replaceState(null, "", location.pathname + location.search + "#tab=" + id);
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll(".tab").forEach(t =>
+    t.addEventListener("click", () => show(t.dataset.pane, true)));
+  const q = new URLSearchParams(location.search);
+  const hashTab = (location.hash.match(/tab=([a-z]+)/) || [])[1];
+  show(hashTab || (q.get("chain") ? "chains" : q.get("topic") ? "topics" : "focus"), false);
 })();
 
 document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_AT;
