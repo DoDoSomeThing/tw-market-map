@@ -1,1 +1,1 @@
-{"ok":true,"data_date":"2026-07-07","fetched_at":"2026-07-08 10:12:04","source":"daily_all 聚合","error":null,"data":{"up":261,"down":1590,"flat":108,"n":1959,"limit_up":12,"limit_down":42,"up_value_pct":8.6,"note":"個股（含產業別、不含 ETF/權證）；漲跌停為 ±9.8% 近似判定"}}
+{"ok":true,"data_date":"2026-07-07","fetched_at":"2026-07-08 02:22:54","source":"daily_all 聚合","error":null,"data":{"up":261,"down":1590,"flat":108,"n":1959,"limit_up":12,"limit_down":42,"up_value_pct":8.6,"note":"個股（含產業別、不含 ETF/權證）；漲跌停為 ±9.8% 近似判定"}}
