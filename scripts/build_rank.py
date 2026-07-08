@@ -13,14 +13,22 @@ HISTORY_KEEP = 15              # 保留最近 N 份日快照
 
 
 def save_snapshot(data_date: str, stocks: list[dict]) -> None:
-    """存當日 {code: close} 快照供週排行；同日重跑覆蓋。"""
+    """存當日 {code: [close, value]} 快照供週排行+日期回看；同日重跑覆蓋。
+    （2026-07-08 前的舊快照是 {code: close} 純量，讀取端兩種都吃。）"""
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    snap = {s["code"]: s["close"] for s in stocks}
+    snap = {s["code"]: [s["close"], round(s["value"])] for s in stocks}
     (HISTORY_DIR / f"{data_date}.json").write_text(
         json.dumps(snap, separators=(",", ":")), encoding="utf-8")
     files = sorted(HISTORY_DIR.glob("????-??-??.json"))
     for f in files[:-HISTORY_KEEP]:
         f.unlink()
+
+
+def snap_close(v) -> float | None:
+    """快照值 → 收盤價（相容新 [close, value] 與舊純量格式）。"""
+    if isinstance(v, (list, tuple)):
+        return v[0] if v else None
+    return v
 
 
 def week_ranks(data_date: str, stocks: list[dict]) -> tuple[list, list, str | None]:
@@ -35,7 +43,7 @@ def week_ranks(data_date: str, stocks: list[dict]) -> tuple[list, list, str | No
     base = json.loads(base_file.read_text(encoding="utf-8"))
     rows = []
     for s in stocks:
-        b = base.get(s["code"])
+        b = snap_close(base.get(s["code"]))
         if not b or b <= 0 or s["value"] < MIN_TRADE_VALUE:
             continue
         rows.append({**{k: s[k] for k in ("code", "name", "close", "value", "industry")},

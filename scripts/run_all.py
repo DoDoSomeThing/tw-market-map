@@ -14,6 +14,8 @@ SCRIPTS = [
     "fetch_tdcc.py",
     "fetch_fundamentals.py",
     "fetch_news.py",
+    "fetch_revenue.py",
+    "build_breadth.py",
     "build_heatmap.py",
     "build_rank.py",
     "build_inst_rank.py",
