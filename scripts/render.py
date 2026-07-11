@@ -128,6 +128,24 @@ tr:last-child td { border-bottom: none; }
 .news-links .mops-item a { color: var(--fg); text-decoration: none; }
 .news-links .mops-item a:hover { color: var(--accent); }
 
+/* 自選股 / 個股面板 / 排序 */
+.wl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; }
+.wl-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: .84rem; line-height: 1.7; cursor: pointer; }
+.wl-card:hover { border-color: var(--accent); }
+.star { cursor: pointer; color: var(--muted); font-size: 1rem; background: none; border: none; font-family: inherit; padding: 0 4px; line-height: 1; }
+.star.on { color: var(--warn); }
+.wl-news { color: var(--muted); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+#sp-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 90; display: none; }
+#sp-panel { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: none; }
+#sp-panel h3 { font-size: 1.05rem; padding-bottom: 4px; }
+.sp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0; font-size: .84rem; }
+.sp-cell { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+.sp-cell .lbl { color: var(--muted); font-size: .7rem; display: block; }
+.sp-close { float: right; background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; font-family: inherit; }
+.sp-close:hover { color: var(--fg); }
+th { cursor: pointer; }
+.spark { vertical-align: middle; }
+
 /* 價值鏈 */
 .stage { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .stage-title { font-size: .95rem; font-weight: 700; padding-bottom: 8px; }
@@ -164,6 +182,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <main>
 
 <div class="tabpane" id="pane-focus">
+<section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div></section>
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
 <section id="sec-revhl"><h2>營收亮點 <span class="stamp" data-stamp="revenue_hl"></span></h2><div class="sub" id="revhl-sub"></div><div id="revhl"></div></section>
@@ -212,6 +231,8 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日 17:30 後自動更新。<br>
 鐵則：只做現況呈現，不做預測；各區塊資料日不一致或過期時顯示 ⚠️。
 </footer>
+<div id="sp-overlay" onclick="spClose()"></div>
+<div id="sp-panel"></div>
 </main>
 
 <script>
@@ -244,6 +265,165 @@ function stampFor(env, maxStale = 2) {
 function cls(p) { return p > 0 ? "up" : (p < 0 ? "down" : "flat"); }
 function sign(p) { return (p > 0 ? "+" : "") + p.toFixed(2); }
 function yi(v) { return v == null ? "—" : (v / 1e8).toFixed(1); } // 元 → 億
+function lotsCell(v, streak) {
+  return v == null ? `<span class="sub">—</span>`
+    : `<span class="${cls(v)}">${(v > 0 ? "+" : "") + v.toLocaleString()}</span>` + streakBadge(streak);
+}
+
+// ── 共用個股索引（search 列：[code,name,industry,close,pct,mkt,成交值億,外資張,投信張,外連,投連]）──
+const QUOTES = {};
+(DATA.search || []).forEach(r => QUOTES[r[0]] = r);
+const IN_TOPIC = {}, IN_CHAIN = {};   // code → [[id, name]]
+if (DATA.topics_view.ok) DATA.topics_view.data.topics.forEach(t =>
+  t.members.forEach(m => (IN_TOPIC[m.code] = IN_TOPIC[m.code] || []).push([t.id, t.name])));
+if (DATA.chains_view.ok) DATA.chains_view.data.chains.forEach(ch =>
+  ch.stages.forEach(st => st.nodes.forEach(nd => nd.members.forEach(m =>
+    (IN_CHAIN[m.code] = IN_CHAIN[m.code] || []).push([ch.id, ch.name])))));
+function newsFor(code, n) {
+  if (!DATA.news.ok) return [];
+  return (DATA.news.data.items || []).filter(it =>
+    (it.stocks || []).some(s => s.endsWith(" " + code))).slice(0, n);
+}
+
+// ── 近日收盤序列（docs/history 快照，lazy fetch）＋ sparkline ──
+const SPARK_CACHE = {};
+function sparkSnap(d) {
+  if (!SPARK_CACHE[d]) SPARK_CACHE[d] = fetch("history/" + d + ".json").then(r => r.json()).catch(() => ({}));
+  return SPARK_CACHE[d];
+}
+async function seriesFor(codes, nDays = 6) {
+  const dates = (DATA.history_dates || []).slice(0, nDays).reverse();   // 舊 → 新
+  if (dates.length < 2) return {};
+  const snaps = await Promise.all(dates.map(sparkSnap));
+  const cOf = v => Array.isArray(v) ? v[0] : v;
+  const out = {};
+  for (const c of codes) {
+    const s = snaps.map(sn => cOf(sn[c])).filter(v => v != null);
+    if (s.length >= 2) out[c] = s;
+  }
+  return out;
+}
+function sparkSVG(s, w = 64, h = 20) {
+  const mn = Math.min(...s), mx = Math.max(...s), rg = (mx - mn) || 1;
+  const pts = s.map((v, i) =>
+    `${(i / (s.length - 1) * (w - 2) + 1).toFixed(1)},${(h - 1 - (v - mn) / rg * (h - 2)).toFixed(1)}`).join(" ");
+  const col = s[s.length - 1] >= s[0] ? "var(--up)" : "var(--down)";
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;
+}
+
+// ── 個股迷你面板 ──
+function spClose() {
+  document.getElementById("sp-overlay").style.display = "none";
+  document.getElementById("sp-panel").style.display = "none";
+}
+window.spClose = spClose;
+document.addEventListener("keydown", e => { if (e.key === "Escape") spClose(); });
+function openStock(code) {
+  const r = QUOTES[code];
+  const yahoo = `https://tw.stock.yahoo.com/quote/${code}.${r && r[5] === "o" ? "TWO" : "TW"}`;
+  if (!r) { window.open(yahoo, "_blank"); return; }
+  const f = DATA.fundamentals.ok ? (DATA.fundamentals.data.stocks[code] || {}) : {};
+  const badges = (IN_TOPIC[code] || []).map(([id, nm]) =>
+      `<span class="sr-badge" onclick="spClose();showTab('topics');showTopic('${id}',true)">${nm}</span>`).join(" ")
+    + " " + (IN_CHAIN[code] || []).map(([id, nm]) =>
+      `<span class="sr-badge" onclick="spClose();showTab('chains');showChain('${id}',true)">${nm}</span>`).join(" ");
+  const news = newsFor(code, 3).map(it => `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
+    <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`).join("");
+  const cell = (lbl, val) => `<div class="sp-cell"><span class="lbl">${lbl}</span>${val}</div>`;
+  document.getElementById("sp-panel").innerHTML = `
+    <button class="sp-close" onclick="spClose()">✕</button>
+    <h3>${r[1]} <span class="sub">${code}${r[2] ? "・" + r[2] : ""}</span>
+      <button class="star ${wlHas(code) ? "on" : ""}" data-code="${code}" onclick="wlToggle('${code}')">★</button></h3>
+    <div><span class="px ${cls(r[4])}" style="font-size:1.3rem;font-weight:700">${r[3]}</span>
+      <span class="${cls(r[4])}">（${sign(r[4])}%）</span> <span id="sp-spark" style="margin-left:8px"></span></div>
+    <div class="sp-grid">
+      ${cell("成交值", r[6] != null ? r[6] + " 億" : "—")}
+      ${cell("外資(張)", lotsCell(r[7], r[9]))}
+      ${cell("投信(張)", lotsCell(r[8], r[10]))}
+      ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
+      ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
+    </div>
+    ${f.yq ? `<div class="sub">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
+    ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
+    ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
+    <div style="padding-top:10px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
+      <span class="sub">（裝 kanpan 擴充會自動掛面板）</span></div>`;
+  document.getElementById("sp-overlay").style.display = "block";
+  document.getElementById("sp-panel").style.display = "block";
+  seriesFor([code]).then(m => {
+    const el = document.getElementById("sp-spark");
+    if (el && m[code]) el.innerHTML = sparkSVG(m[code], 140, 30);
+  });
+}
+window.openStock = openStock;
+
+// ── 自選股（localStorage，本機不跨裝置）──
+const WL_KEY = "twmm_watchlist";
+function wlGet() { try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch (e) { return []; } }
+function wlHas(code) { return wlGet().includes(code); }
+function wlToggle(code) {
+  const a = wlGet(), i = a.indexOf(code);
+  if (i >= 0) a.splice(i, 1); else a.push(code);
+  localStorage.setItem(WL_KEY, JSON.stringify(a));
+  document.querySelectorAll(`.star[data-code="${code}"]`).forEach(s => s.classList.toggle("on", i < 0));
+  renderWatchlist();
+}
+window.wlToggle = wlToggle;
+function renderWatchlist() {
+  const el = document.getElementById("watchlist");
+  const codes = wlGet();
+  document.getElementById("wl-hint").textContent = codes.length ? `${codes.length} 檔・存在本機瀏覽器` : "";
+  if (!codes.length) {
+    el.innerHTML = `<div class="sub">尚無自選股 — 右上搜尋個股，點 ★ 加入（存在本機瀏覽器，跨裝置不同步）</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="wl-cards">` + codes.map(code => {
+    const r = QUOTES[code];
+    if (!r) return `<div class="wl-card"><b>${code}</b> <span class="sub">查無行情</span>
+      <button class="star on" data-code="${code}" style="float:right" onclick="event.stopPropagation();wlToggle('${code}')">★</button></div>`;
+    const nw = newsFor(code, 1)[0];
+    return `<div class="wl-card" onclick="openStock('${code}')" title="${fundLine(code) || ""}">
+      <b>${r[1]}</b> <span class="sub">${code}</span>
+      <button class="star on" data-code="${code}" style="float:right" onclick="event.stopPropagation();wlToggle('${code}')">★</button><br>
+      <span class="${cls(r[4])}" style="font-weight:700">${r[3]}（${sign(r[4])}%）</span> <span class="spark" id="wl-sp-${code}"></span><br>
+      <span class="sub">外資</span> ${lotsCell(r[7], r[9])}　<span class="sub">投信</span> ${lotsCell(r[8], r[10])}
+      ${nw ? `<a class="wl-news" href="${nw.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📰 ${nw.title}</a>` : ""}
+    </div>`;
+  }).join("") + `</div>`;
+  seriesFor(codes).then(m => codes.forEach(c => {
+    const sp = document.getElementById("wl-sp-" + c);
+    if (sp && m[c]) sp.innerHTML = sparkSVG(m[c]);
+  }));
+}
+renderWatchlist();
+
+// ── 表格點欄位排序（全站，事件委派）──
+document.addEventListener("click", e => {
+  const th = e.target.closest("th");
+  if (!th) return;
+  const table = th.closest("table");
+  if (!table) return;
+  const rows = Array.from(table.querySelectorAll("tr")).slice(1);
+  if (rows.length < 2) return;
+  const idx = Array.from(th.parentNode.children).indexOf(th);
+  const dir = th.dataset.dir === "desc" ? "asc" : "desc";
+  table.querySelectorAll("th").forEach(t => delete t.dataset.dir);
+  th.dataset.dir = dir;
+  const num = t => {
+    const m = String(t).replace(/[,＋]/g, "").match(/-?\\d+(\\.\\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  };
+  rows.sort((a, b) => {
+    const at = a.children[idx] ? a.children[idx].innerText : "";
+    const bt = b.children[idx] ? b.children[idx].innerText : "";
+    const av = num(at), bv = num(bt);
+    if (av == null && bv == null) return at.localeCompare(bt, "zh-Hant");
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return dir === "desc" ? bv - av : av - bv;
+  });
+  rows.forEach(r => r.parentNode.appendChild(r));
+});
 
 // ── 指數卡 ──
 (function () {
@@ -495,7 +675,7 @@ function streakBadge(s) {
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%">
         <span class="c-nm">${c.name}</span>${c.h > 26 && c.w > 40 ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
-    const rows = t.members.map(m => `<tr title="${fundLine(m.code)}">
+    const rows = t.members.map(m => `<tr style="cursor:pointer" onclick="openStock('${m.code}')" title="${fundLine(m.code)}">
       <td>${m.name} <span class="sub">${m.code}</span></td>
       <td class="${cls(m.pct)}">${sign(m.pct)}%</td><td>${m.close}</td>
       <td class="sub">${(m.value/1e8).toFixed(1)}億</td>
@@ -534,7 +714,7 @@ function streakBadge(s) {
     const t = topics.find(x => x.id === id);
     if (!t) { detailEl.innerHTML = ""; return; }
     cardsEl.querySelectorAll(".radar-card").forEach(c => c.classList.toggle("active", c.dataset.id === id));
-    const rows = (t.members || []).map(m => `<tr title="${fundLine(m.code)}">
+    const rows = (t.members || []).map(m => `<tr style="cursor:pointer" onclick="openStock('${m.code}')" title="${fundLine(m.code)}">
       <td>${m.name} <span class="sub">${m.code}</span></td>
       <td class="${cls(m.pct)}">${sign(m.pct)}%</td><td>${m.close}</td>
       <td class="sub">${(m.value/1e8).toFixed(1)}億</td>
@@ -564,9 +744,21 @@ function streakBadge(s) {
         <b>${t.name}</b> <span class="sub">${t.group}</span><br>
         聲量 <span class="radar-heat">${t.heat}</span> <span class="sub">今日 ${t.n_today} 則</span><br>
         <span class="${cls(t.avg_pct || 0)}">${t.avg_pct == null ? "—" : sign(t.avg_pct) + "%"}</span> <span class="sub">題材日漲跌</span>
+        <span class="spark" id="radar-sp-${t.id}" style="float:right"></span>
       </div>`).join("") + `</div>`;
     cardsEl.querySelectorAll(".radar-card").forEach(c => c.addEventListener("click", () => showDetail(c.dataset.id)));
     showDetail(topics[0].id);
+    // 題材 5 日等權指數 sparkline（history 快照，等權、以共同窗首日=1 正規化）
+    const allCodes = [...new Set(topics.flatMap(t => (t.members || []).map(m => m.code)))];
+    seriesFor(allCodes).then(m => topics.forEach(t => {
+      const sp = document.getElementById("radar-sp-" + t.id);
+      const series = (t.members || []).map(x => m[x.code]).filter(s => s && s.length >= 2);
+      if (!sp || !series.length) return;
+      const L = Math.min(...series.map(s => s.length));
+      const idxSeries = Array.from({ length: L }, (_, i) =>
+        series.reduce((acc, s) => acc + s[s.length - L + i] / s[s.length - L], 0) / series.length);
+      sp.innerHTML = sparkSVG(idxSeries);
+    }));
   }
 
   const hot = d.stocks_hot || [];
@@ -587,8 +779,8 @@ function streakBadge(s) {
     }).join("");
     stocksEl.innerHTML = `<div style="overflow-x:auto"><table style="min-width:760px"><tr><th>個股</th><th>聲量</th><th>漲跌</th><th>收盤</th><th>外資(張)</th><th>投信(張)</th><th style="text-align:left">最新相關標題</th></tr>${body}</table></div>`;
     stocksEl.querySelectorAll(".radar-hot-row").forEach(tr => tr.addEventListener("click", e => {
-      if (e.target.closest("a")) return;
-      window.open(`https://tw.stock.yahoo.com/quote/${tr.dataset.code}.${tr.dataset.mkt === "tpex" ? "TWO" : "TW"}`, "_blank");
+      if (e.target.closest("a") || e.target.closest("th")) return;
+      openStock(tr.dataset.code);
     }));
   }
 })();
@@ -669,8 +861,7 @@ function streakBadge(s) {
           ${lotsTag("外資", m.f_lots)}${lotsTag("投信", m.t_lots)}
           <span class="co-px ${cls(m.pct)}">${m.close} (${sign(m.pct)}%)</span></div>`).join("") +
         `</div>`).join("") + `</div></div>`).join("");
-    el.querySelectorAll(".co").forEach(c => c.addEventListener("click", () =>
-      window.open(`https://tw.stock.yahoo.com/quote/${c.dataset.code}.${c.dataset.mkt === "tpex" ? "TWO" : "TW"}`, "_blank")));
+    el.querySelectorAll(".co").forEach(c => c.addEventListener("click", () => openStock(c.dataset.code)));
   }
   window.showChain = show;   // 搜尋徽章跳轉用
   chipsEl.innerHTML = `<div class="chips">` + chains.map(c =>
@@ -782,8 +973,7 @@ function fundLine(code) {
       營收 <b>${r.rev_yi}</b> 億　<span class="up">YoY +${r.yoy}%</span>${r.mom != null ? `　<span class="sub">MoM ${r.mom > 0 ? "+" : ""}${r.mom}%</span>` : ""}<br>
       <span class="${cls(r.pct)}">${r.close}（${sign(r.pct)}%）</span>
     </div>`).join("") + `</div>`;
-  el.querySelectorAll(".rev-card").forEach(c => c.addEventListener("click", () =>
-    window.open("https://tw.stock.yahoo.com/quote/" + c.dataset.code + ".TW", "_blank")));
+  el.querySelectorAll(".rev-card").forEach(c => c.addEventListener("click", () => openStock(c.dataset.code)));
 })();
 
 // ── 搜尋 ──
@@ -791,14 +981,6 @@ function fundLine(code) {
   const inp = document.getElementById("search");
   const res = document.getElementById("search-res");
   const idx = DATA.search || [];
-  // code → 題材/價值鏈 反查
-  const inTopic = {}, inChain = {};
-  if (DATA.topics_view.ok) DATA.topics_view.data.topics.forEach(t =>
-    t.members.forEach(m => (inTopic[m.code] = inTopic[m.code] || []).push([t.id, t.name])));
-  if (DATA.chains_view.ok) DATA.chains_view.data.chains.forEach(ch =>
-    ch.stages.forEach(st => st.nodes.forEach(nd => nd.members.forEach(m =>
-      (inChain[m.code] = inChain[m.code] || []).push([ch.id, ch.name])))));
-  function go(url) { window.open(url, "_blank"); }
   function render(q) {
     q = q.trim().toUpperCase();
     if (!q) { res.style.display = "none"; return; }
@@ -811,18 +993,20 @@ function fundLine(code) {
     }
     if (!hits.length) { res.innerHTML = `<div class="sr-item sub">無符合</div>`; res.style.display = "block"; return; }
     res.innerHTML = hits.map(r => {
-      const badges = (inTopic[r[0]] || []).map(([id, nm]) =>
+      const badges = (IN_TOPIC[r[0]] || []).map(([id, nm]) =>
           `<span class="sr-badge" data-t="${id}">${nm}</span>`).join("")
-        + (inChain[r[0]] || []).map(([id, nm]) =>
+        + (IN_CHAIN[r[0]] || []).map(([id, nm]) =>
           `<span class="sr-badge" data-c="${id}">${nm}</span>`).join("");
       return `<div class="sr-item" data-code="${r[0]}" data-mkt="${r[5]}">
         <b>${r[1]}</b><span class="sub">${r[0]}${r[2] ? "・" + r[2] : ""}</span>
-        <span class="${cls(r[4])}" style="margin-left:auto">${r[3]}（${sign(r[4])}%）</span>${badges}</div>`;
+        <span class="${cls(r[4])}" style="margin-left:auto">${r[3]}（${sign(r[4])}%）</span>
+        <button class="star ${wlHas(r[0]) ? "on" : ""}" data-code="${r[0]}" onclick="event.stopPropagation();wlToggle('${r[0]}')">★</button>${badges}</div>`;
     }).join("");
     res.style.display = "block";
     res.querySelectorAll(".sr-item[data-code]").forEach(it => it.addEventListener("click", e => {
-      if (e.target.classList.contains("sr-badge")) return;
-      go(`https://tw.stock.yahoo.com/quote/${it.dataset.code}.${it.dataset.mkt === "o" ? "TWO" : "TW"}`);
+      if (e.target.classList.contains("sr-badge") || e.target.classList.contains("star")) return;
+      res.style.display = "none";
+      openStock(it.dataset.code);
     }));
     res.querySelectorAll(".sr-badge").forEach(b => b.addEventListener("click", () => {
       res.style.display = "none"; inp.value = "";
@@ -868,14 +1052,25 @@ def main() -> None:
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar")}
 
-    # 搜尋索引：全市場 4 碼個股 [code, name, industry, close, pct, 市場(t/o)]
+    # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
+    # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
+    from build_inst_rank import load_streaks
+    t86 = read_json("t86")
+    t86_stocks = t86["data"].get("stocks", {}) if t86.get("ok") else {}
+    streaks = load_streaks(t86.get("data_date") or "9999-99-99") if t86.get("ok") else {}
     search = []
     daily = read_json("daily_all")
     if daily.get("ok"):
         for s in daily["data"].get("stocks", []):
             if len(s["code"]) == 4 and s["code"].isdigit():
+                inst = t86_stocks.get(s["code"])
+                sf, st = streaks.get(s["code"], (0, 0))
                 search.append([s["code"], s["name"], s.get("industry") or "",
-                               s["close"], s["pct"], "o" if s.get("market") == "tpex" else "t"])
+                               s["close"], s["pct"], "o" if s.get("market") == "tpex" else "t",
+                               round(s.get("value", 0) / 1e8, 1),
+                               round(inst["f"] / 1000) if inst else None,
+                               round(inst["t"] / 1000) if inst else None,
+                               sf, st])
     data["search"] = search
 
     # 日期回看：history 快照複製進 docs/（Pages 只 serve docs/），並嵌可選日期清單
@@ -890,19 +1085,13 @@ def main() -> None:
             dates.append(f.stem)
     data["history_dates"] = sorted(dates, reverse=True)
 
-    # 基本面全量 ~2000 檔會撐爆頁面 → 只內嵌「題材+價值鏈成員」子集（tooltip 用），排行表本身已在信封裡
+    # 基本面全量內嵌（個股面板要查任意個股；只留面板用欄位，gzip 後負擔小）
     fund = data["fundamentals"]
     if fund.get("ok"):
-        need: set[str] = set()
-        if data["topics_view"].get("ok"):
-            for t in data["topics_view"]["data"].get("topics", []):
-                need.update(m["code"] for m in t.get("members", []))
-        if data["chains_view"].get("ok"):
-            for ch in data["chains_view"]["data"].get("chains", []):
-                for st in ch.get("stages", []):
-                    for nd in st.get("nodes", []):
-                        need.update(m["code"] for m in nd.get("members", []))
-        fund["data"]["stocks"] = {c: f for c, f in fund["data"]["stocks"].items() if c in need}
+        keep = ("eps", "gm", "om", "yield_pct", "debt_pct", "yq", "div_cash")
+        fund["data"]["stocks"] = {
+            c: {k: f[k] for k in keep if f.get(k) is not None}
+            for c, f in fund["data"]["stocks"].items()}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
             .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))
