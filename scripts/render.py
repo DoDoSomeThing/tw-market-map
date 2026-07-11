@@ -13,6 +13,11 @@ TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>台股產業地圖</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#05070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
 :root {
   --bg: #05070d; --panel: #0d1524; --border: #1e2c45;
@@ -128,6 +133,18 @@ tr:last-child td { border-bottom: none; }
 .news-links .mops-item a { color: var(--fg); text-decoration: none; }
 .news-links .mops-item a:hover { color: var(--accent); }
 
+/* 今日異動 */
+.chg-list { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: .86rem; }
+.chg-item { padding: 7px 10px; border-bottom: 1px solid var(--border); line-height: 1.5; cursor: pointer; }
+.chg-item:hover { background: #1a2438; }
+.chg-item:last-child { border-bottom: none; }
+.chg-item.wl { background: #101c33; }
+
+/* 手機：表格容器橫向捲動，不擠爆版面（min-width:0 讓 grid item 肯縮） */
+.ranks > div, .grid2 > div, #market > div, #topic-detail, #radar-detail, #tdcc, #fund, #instrank, #ranks { overflow-x: auto; min-width: 0; }
+@media (max-width: 700px) { th, td { white-space: nowrap; padding: 6px 8px; } }
+.hm-cell[data-code] { cursor: pointer; }
+
 /* 自選股 / 個股面板 / 排序 */
 .wl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; }
 .wl-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: .84rem; line-height: 1.7; cursor: pointer; }
@@ -182,6 +199,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <main>
 
 <div class="tabpane" id="pane-focus">
+<section id="sec-changes"><h2>今日異動 <span class="stamp" data-stamp="changes"></span></h2>
+<div class="sub">今天 vs 昨天的變化，規則寫死可驗證：法人連買賣 ≥3 日翻向｜新聞點名 ≥2 則｜澄清/重大公告｜營收新公布｜題材聲量 ≥昨日 2 倍｜現況描述，非訊號</div>
+<div id="changes"></div></section>
 <section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div></section>
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
@@ -326,6 +346,7 @@ function openStock(code) {
   const yahoo = `https://tw.stock.yahoo.com/quote/${code}.${r && r[5] === "o" ? "TWO" : "TW"}`;
   if (!r) { window.open(yahoo, "_blank"); return; }
   const f = DATA.fundamentals.ok ? (DATA.fundamentals.data.stocks[code] || {}) : {};
+  const rv = DATA.revenue_hl.ok ? (DATA.revenue_hl.data.stocks || {})[code] : null;
   const badges = (IN_TOPIC[code] || []).map(([id, nm]) =>
       `<span class="sr-badge" onclick="spClose();showTab('topics');showTopic('${id}',true)">${nm}</span>`).join(" ")
     + " " + (IN_CHAIN[code] || []).map(([id, nm]) =>
@@ -345,7 +366,10 @@ function openStock(code) {
       ${cell("投信(張)", lotsCell(r[8], r[10]))}
       ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
       ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
+      ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
+           + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
     </div>
+    <div id="sp-inst"></div>
     ${f.yq ? `<div class="sub">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
     ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
     ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
@@ -356,6 +380,13 @@ function openStock(code) {
   seriesFor([code]).then(m => {
     const el = document.getElementById("sp-spark");
     if (el && m[code]) el.innerHTML = sparkSVG(m[code], 140, 30);
+  });
+  loadInst10().then(d => {
+    const el = document.getElementById("sp-inst");
+    if (!el || !d || !d.stocks || !d.stocks[code]) return;
+    const seq = d.stocks[code];
+    el.innerHTML = `<div class="sub" style="padding:2px 0">法人近 ${seq.length} 日買賣超（張）</div>
+      <div><span class="sub">外資</span> ${barsSVG(seq.map(x => x[0]))}　<span class="sub">投信</span> ${barsSVG(seq.map(x => x[1]))}</div>`;
   });
 }
 window.openStock = openStock;
@@ -370,6 +401,7 @@ function wlToggle(code) {
   localStorage.setItem(WL_KEY, JSON.stringify(a));
   document.querySelectorAll(`.star[data-code="${code}"]`).forEach(s => s.classList.toggle("on", i < 0));
   renderWatchlist();
+  if (typeof renderChanges === "function") renderChanges();
 }
 window.wlToggle = wlToggle;
 function renderWatchlist() {
@@ -399,6 +431,51 @@ function renderWatchlist() {
   }));
 }
 renderWatchlist();
+
+// ── 今日異動 ──
+function renderChanges() {
+  const env = DATA.changes, el = document.getElementById("changes");
+  document.querySelector('[data-stamp="changes"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">異動資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data, wl = new Set(wlGet());
+  const ICON = { mops: "📢", flip: "🔄", news: "📰", rev: "💰", streak: "📈" };
+  const line = (e, isWl) => `<div class="chg-item${isWl ? " wl" : ""}" onclick="openStock('${e.code}')">
+    ${ICON[e.t] || "•"} ${isWl ? `<span class="tag t重大">自選</span>` : ""}<b>${e.name}</b> <span class="sub">${e.code}</span>　${e.txt}</div>`;
+  const wlEv = (d.stock_events || []).filter(e => wl.has(e.code));
+  const others = (d.stock_events || []).filter(e => !wl.has(e.code));
+  const mk = (d.market_events || []).map(e => `<div class="chg-item" style="cursor:default">⚠️ ${e.txt}</div>`).join("");
+  const tp = (d.topic_events || []).map(e =>
+    `<div class="chg-item" onclick="showTab('radar')">🔥 題材「<b>${e.name}</b>」${e.txt}</div>`).join("");
+  const wlHtml = wl.size
+    ? (wlEv.length ? wlEv.map(e => line(e, true)).join("") : `<div class="chg-item sub" style="cursor:default">自選股今日無異動</div>`)
+    : `<div class="chg-item sub" style="cursor:default">尚未加自選股（右上搜尋點 ★），以下為全市場異動</div>`;
+  const topOthers = others.slice(0, 8).map(e => line(e, false)).join("");
+  const rest = others.length > 8
+    ? `<details><summary class="sub" style="cursor:pointer;padding:7px 10px">更多全市場異動（${others.length - 8} 條）</summary>${others.slice(8, 80).map(e => line(e, false)).join("")}</details>` : "";
+  if (!mk && !tp && !wlEv.length && !others.length) {
+    el.innerHTML = `<div class="chg-list"><div class="chg-item sub" style="cursor:default">今日無特別異動</div></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="chg-list">${mk}${tp}${wlHtml}${topOthers}${rest}</div>`;
+}
+renderChanges();
+
+// ── 法人近日買賣柱狀（inst10.json lazy fetch）──
+let INST10 = null;
+function loadInst10() {
+  if (!INST10) INST10 = fetch("inst10.json").then(r => r.json()).catch(() => null);
+  return INST10;
+}
+function barsSVG(vals, w = 150, h = 30) {
+  const mx = Math.max(...vals.map(v => Math.abs(v)), 1);
+  const bw = w / vals.length, mid = h / 2;
+  const rects = vals.map((v, i) => {
+    const bh = Math.max(1, Math.abs(v) / mx * (mid - 1));
+    const y = v >= 0 ? mid - bh : mid;
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" fill="${v >= 0 ? "var(--up)" : "var(--down)"}"/>`;
+  }).join("");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="var(--border)"/>${rects}</svg>`;
+}
 
 // ── 表格點欄位排序（全站，事件委派）──
 document.addEventListener("click", e => {
@@ -538,7 +615,7 @@ function drawHeatmap(groups) {
     const boxes = out.map(c => {
       const fs = Math.max(9, Math.min(16, Math.sqrt(c.w * c.h) / 6));
       const showPct = c.h > 26 && c.w > 40;
-      return `<div class="hm-cell" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
+      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%　成交 ${(c.value/1e8).toFixed(1)}億">
         <span class="c-nm">${c.name}</span>${showPct ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
@@ -674,7 +751,7 @@ function streakBadge(s) {
     squarify(cells, 0, 0, W, h, out);
     const boxes = out.map(c => {
       const fs = Math.max(9, Math.min(15, Math.sqrt(c.w * c.h) / 6));
-      return `<div class="hm-cell" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
+      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%">
         <span class="c-nm">${c.name}</span>${c.h > 26 && c.w > 40 ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
@@ -1067,6 +1144,16 @@ function fundLine(code) {
   show(hashTab || (q.get("chain") ? "chains" : q.get("topic") ? "topics" : "focus"), false);
 })();
 
+// 熱力圖格子 → 個股面板（事件委派，含日期回看重繪後的格子）
+document.addEventListener("click", e => {
+  const hc = e.target.closest(".hm-cell[data-code]");
+  if (hc) openStock(hc.dataset.code);
+});
+
+// PWA service worker（GitHub Pages 為 https；本機測試 http 不註冊）
+if ("serviceWorker" in navigator && location.protocol === "https:")
+  navigator.serviceWorker.register("sw.js");
+
 document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_AT;
 </script>
 </body>
@@ -1078,7 +1165,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover")}
+             "news_radar", "topic_discover", "changes")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
@@ -1112,6 +1199,25 @@ def main() -> None:
             shutil.copy2(f, hist_dst / f.name)
             dates.append(f.stem)
     data["history_dates"] = sorted(dates, reverse=True)
+
+    # 法人近 10 日序列 → docs/inst10.json（個股面板柱狀圖；lazy fetch 單檔，別內嵌撐爆頁面）
+    t86_files = sorted((DATA_DIR / "history_t86").glob("????-??-??.json"))[-10:]
+    if t86_files and daily.get("ok"):
+        snaps10 = [json.loads(f.read_text(encoding="utf-8")) for f in t86_files]
+        inst10: dict[str, list] = {}
+        for s in daily["data"].get("stocks", []):
+            code = s["code"]
+            if len(code) != 4 or not code.isdigit():
+                continue
+            seq = [[round((sn.get(code) or [0, 0])[0] / 1000),
+                    round((sn.get(code) or [0, 0])[1] / 1000)] for sn in snaps10]
+            if any(v[0] or v[1] for v in seq):
+                inst10[code] = seq
+        DOCS_DIR.mkdir(parents=True, exist_ok=True)
+        (DOCS_DIR / "inst10.json").write_text(
+            json.dumps({"dates": [f.stem for f in t86_files], "stocks": inst10},
+                       ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[OK ] docs/inst10.json（{len(inst10)} 檔 × {len(t86_files)} 日）")
 
     # 基本面全量內嵌（個股面板要查任意個股；只留面板用欄位，gzip 後負擔小）
     fund = data["fundamentals"]

@@ -75,8 +75,15 @@ def main() -> None:
         })
     picks.sort(key=lambda x: -x["yoy"])
 
+    # 全量營收 map（個股面板 + 今日異動用）：code -> [當月營收億, YoY%, MoM%]
+    stocks = {r["code"]: [round(r["rev"] / 1e5, 1),
+                          round(r["yoy"], 1) if r["yoy"] is not None else None,
+                          round(r["mom"], 1) if r["mom"] is not None else None]
+              for r in rows}
+
     write_json("revenue_hl", {
         "ym_label": ym_label, "items": picks[:TOP_N], "n_reported": len(rows),
+        "stocks": stocks,
         "criteria": f"年增 ≥{MIN_YOY:.0f}% 且月增不為負；當月營收 ≥1 億；日成交值 ≥0.5 億",
     }, data_date=out_date, source="TWSE t187ap05_L + TPEx mopsfin_t187ap05_O（月營收）",
         error="；".join(errs) or None)
