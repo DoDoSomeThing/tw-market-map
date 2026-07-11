@@ -195,6 +195,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-radar"><h2>時事熱度 — 題材 <span class="stamp" data-stamp="news_radar"></span></h2>
   <div class="sub">聲量 = 近 3 日新聞標題/公告關鍵字比對則數（當日×1.0、昨×0.6、前×0.3；澄清/重大公告×0.8）｜關鍵字表為 AI 初稿+人工校對｜現況描述，非訊號、非投資建議</div>
   <div id="radar-cards"></div><div id="radar-detail"></div></section>
+<section id="sec-discover"><h2>新題材候選（自動偵測） <span class="stamp" data-stamp="topic_discover"></span></h2>
+  <div class="sub">近 2 日新聞詞頻突增 vs 前 7 日基線（純統計、可重現）｜偵測 ≠ 題材認定 — 看對眼再把關鍵字收進 topics.json 轉正｜雜訊詞加進 topics/discover_stopwords.txt</div>
+  <div id="discover"></div></section>
 <section id="sec-radar-stocks"><h2>時事熱度 — 個股</h2>
   <div class="sub">被新聞點名/發澄清重大公告的個股，依聲量排序｜點列開 Yahoo 股市</div><div id="radar-stocks"></div></section>
 </div>
@@ -785,6 +788,31 @@ function streakBadge(s) {
   }
 })();
 
+// ── 新題材候選（詞頻突增）──
+(function () {
+  const env = DATA.topic_discover, el = document.getElementById("discover");
+  document.querySelector('[data-stamp="topic_discover"]').innerHTML = stampFor(env);
+  if (!env.ok) { el.innerHTML = `<div class="err">偵測資料失敗：${env.error || ""}</div>`; return; }
+  const d = env.data;
+  if (d.note) { el.innerHTML = `<div class="sub">⏳ ${d.note}</div>`; return; }
+  const cands = d.candidates || [];
+  if (!cands.length) { el.innerHTML = `<div class="sub">近 2 日無明顯突增詞</div>`; return; }
+  el.innerHTML = `<div class="radar-cards">` + cands.map(c => {
+    const stocks = (c.stocks || []).map(s => {
+      const code = s.tag.split(" ").pop();
+      return `<span class="sr-badge" onclick="openStock('${code}')">${s.tag}×${s.n}</span>`;
+    }).join(" ");
+    const news = (c.headlines || []).map(h => `<div class="mops-item"><span class="tm">${(h.time || "").slice(5)}</span>
+      <span class="tag t自結">${h.source}</span><a href="${h.link}" target="_blank" rel="noopener" style="color:var(--fg)">${h.title}</a></div>`).join("");
+    return `<div class="radar-card" style="cursor:default">
+      <b>${c.terms.join("／")}</b><br>
+      <span class="radar-heat">${c.n_recent}</span> <span class="sub">則・突增 ×${c.burst}</span><br>
+      ${stocks || `<span class="sub">未點名個股</span>`}
+      <details style="padding-top:4px"><summary class="sub" style="cursor:pointer">相關標題</summary><div class="news-links">${news}</div></details>
+    </div>`;
+  }).join("") + `</div>`;
+})();
+
 // ── 排行 ──
 (function () {
   const env = DATA.rank, el = document.getElementById("ranks");
@@ -1050,7 +1078,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar")}
+             "news_radar", "topic_discover")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
