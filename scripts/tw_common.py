@@ -132,6 +132,42 @@ def sanity_check_pct(pct: float, limit: float = 10.0) -> bool:
         return False
 
 
+# ── 題材關鍵字比對（時事雷達；fetch_news / build_news_radar 共用）──
+
+def build_topic_matcher(topics_cfg: dict):
+    """topics.json cfg → callable(text) -> [topic_id]。
+    中文(含 CJK)關鍵字用子字串比對；純 ASCII 關鍵字用整字比對(避免 'VC' 誤中 'PVC')。
+    題材名自動納入關鍵字（'CPO/矽光子' 以 '/' 切開各自成關鍵字）。"""
+    import re as _re
+
+    def is_ascii(s: str) -> bool:
+        return all(ord(c) < 128 for c in s)
+
+    rules = []  # (topic_id, [中文子字串], compiled_ascii_regex|None)
+    for t in topics_cfg.get("topics", []):
+        kws = list(t.get("keywords", []))
+        for part in str(t.get("name", "")).split("/"):
+            p = part.strip()
+            if p and p not in kws:
+                kws.append(p)
+        cjk = [k for k in kws if not is_ascii(k)]
+        ascii_kws = [k for k in kws if is_ascii(k) and len(k) >= 2]
+        pat = None
+        if ascii_kws:
+            alt = "|".join(_re.escape(k) for k in sorted(ascii_kws, key=len, reverse=True))
+            pat = _re.compile(rf"(?<![A-Za-z0-9])(?:{alt})(?![A-Za-z0-9])", _re.IGNORECASE)
+        rules.append((t["id"], cjk, pat))
+
+    def match(text: str) -> list[str]:
+        hits = []
+        for tid, cjk, pat in rules:
+            if any(k in text for k in cjk) or (pat and pat.search(text)):
+                hits.append(tid)
+        return hits
+
+    return match
+
+
 # ── JSON 輸出（統一信封格式）──
 
 def write_json(name: str, payload: dict, *, data_date: str | None, source: str,

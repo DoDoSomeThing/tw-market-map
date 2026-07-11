@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from tw_common import DATA_DIR, read_json, write_error, write_json
 

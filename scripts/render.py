@@ -117,6 +117,17 @@ tr:last-child td { border-bottom: none; }
 .mops-item .who { color: var(--fg); font-weight: 600; margin-right: 6px; }
 .mops-item .tm { color: var(--muted); font-size: .75rem; margin-right: 6px; }
 
+/* 時事雷達 */
+.radar-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; padding: 6px 0; }
+.radar-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: .84rem; line-height: 1.6; cursor: pointer; }
+.radar-card:hover { border-color: var(--accent); }
+.radar-card.active { border-color: var(--accent); background: #14203a; }
+.radar-card b { font-size: .95rem; }
+.radar-heat { color: var(--warn); font-weight: 700; }
+.news-links { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: .84rem; margin-top: 8px; }
+.news-links .mops-item a { color: var(--fg); text-decoration: none; }
+.news-links .mops-item a:hover { color: var(--accent); }
+
 /* 價值鏈 */
 .stage { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .stage-title { font-size: .95rem; font-weight: 700; padding-bottom: 8px; }
@@ -141,6 +152,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
     <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div></div>
   <nav class="tabs" id="tabs">
     <button class="tab" data-pane="focus">每日焦點</button>
+    <button class="tab" data-pane="radar">時事雷達</button>
     <button class="tab" data-pane="topics">題材</button>
     <button class="tab" data-pane="chains">產業鏈</button>
     <button class="tab" data-pane="market">市場熱力</button>
@@ -158,6 +170,14 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
+</div>
+
+<div class="tabpane" id="pane-radar">
+<section id="sec-radar"><h2>時事熱度 — 題材 <span class="stamp" data-stamp="news_radar"></span></h2>
+  <div class="sub">聲量 = 近 3 日新聞標題/公告關鍵字比對則數（當日×1.0、昨×0.6、前×0.3；澄清/重大公告×0.8）｜關鍵字表為 AI 初稿+人工校對｜現況描述，非訊號、非投資建議</div>
+  <div id="radar-cards"></div><div id="radar-detail"></div></section>
+<section id="sec-radar-stocks"><h2>時事熱度 — 個股</h2>
+  <div class="sub">被新聞點名/發澄清重大公告的個股，依聲量排序｜點列開 Yahoo 股市</div><div id="radar-stocks"></div></section>
 </div>
 
 <div class="tabpane" id="pane-topics">
@@ -495,6 +515,84 @@ function streakBadge(s) {
   show(q && topics.some(t => t.id === q) ? q : topics[0].id, false);
 })();
 
+// ── 時事雷達 ──
+(function () {
+  const env = DATA.news_radar;
+  const cardsEl = document.getElementById("radar-cards");
+  const detailEl = document.getElementById("radar-detail");
+  const stocksEl = document.getElementById("radar-stocks");
+  document.querySelector('[data-stamp="news_radar"]').innerHTML = stampFor(env);
+  if (!env.ok) {
+    cardsEl.innerHTML = `<div class="err">時事雷達資料失敗：${env.error || ""}</div>`;
+    stocksEl.innerHTML = `<div class="sub">無資料</div>`;
+    return;
+  }
+  const d = env.data, topics = d.topics || [];
+  const note = env.error ? `<div class="sub stale" style="padding:2px 0 6px">⚠️ ${env.error}</div>` : "";
+
+  function showDetail(id) {
+    const t = topics.find(x => x.id === id);
+    if (!t) { detailEl.innerHTML = ""; return; }
+    cardsEl.querySelectorAll(".radar-card").forEach(c => c.classList.toggle("active", c.dataset.id === id));
+    const rows = (t.members || []).map(m => `<tr title="${fundLine(m.code)}">
+      <td>${m.name} <span class="sub">${m.code}</span></td>
+      <td class="${cls(m.pct)}">${sign(m.pct)}%</td><td>${m.close}</td>
+      <td class="sub">${(m.value/1e8).toFixed(1)}億</td>
+      <td class="${m.f_lots == null ? "sub" : cls(m.f_lots)}">${m.f_lots == null ? "—" : (m.f_lots > 0 ? "+" : "") + m.f_lots.toLocaleString()}${streakBadge(m.f_streak)}</td>
+      <td class="${m.t_lots == null ? "sub" : cls(m.t_lots)}">${m.t_lots == null ? "—" : (m.t_lots > 0 ? "+" : "") + m.t_lots.toLocaleString()}${streakBadge(m.t_streak)}</td>
+    </tr>`).join("");
+    const memberTbl = rows
+      ? `<table><tr><th>題材個股</th><th>漲跌</th><th>收盤</th><th>成交</th><th>外資(張)</th><th>投信(張)</th></tr>${rows}</table>`
+      : `<div class="sub">題材行情資料缺（topics_view 失敗）</div>`;
+    const newsHtml = (t.headlines || []).map(h => `<div class="mops-item">
+      <span class="tm">${(h.time || "").slice(5)}</span><span class="tag t自結">${h.source}</span>
+      <a href="${h.link}" target="_blank" rel="noopener">${h.title}</a></div>`).join("");
+    const mopsHtml = (t.mops || []).map(m => `<div class="mops-item">
+      <span class="tag t${m.tag}">${m.tag}</span><span class="who">${m.name} <span class="sub">${m.code}</span></span>${m.subject}</div>`).join("");
+    detailEl.innerHTML = `<div class="topic-desc"><b>${t.name}</b>　聲量 <span class="radar-heat">${t.heat}</span>（今日 ${t.n_today} 則、近 3 日 ${t.n_3d} 則）　題材日漲跌 <span class="${cls(t.avg_pct || 0)}">${t.avg_pct == null ? "—" : sign(t.avg_pct) + "%"}</span>
+      　<span class="sub" style="cursor:pointer;text-decoration:underline" onclick="showTab('topics');showTopic('${t.id}',true)">→ 題材頁看熱力圖</span></div>
+      ${memberTbl}
+      ${newsHtml ? `<div class="news-links">${newsHtml}</div>` : ""}
+      ${mopsHtml ? `<div class="news-links">${mopsHtml}</div>` : ""}`;
+  }
+
+  if (!topics.length) {
+    cardsEl.innerHTML = note + `<div class="sub">近 3 日新聞/公告無題材聲量（或關鍵字表待擴充）</div>`;
+  } else {
+    cardsEl.innerHTML = note + `<div class="radar-cards">` + topics.map(t => `
+      <div class="radar-card" data-id="${t.id}">
+        <b>${t.name}</b> <span class="sub">${t.group}</span><br>
+        聲量 <span class="radar-heat">${t.heat}</span> <span class="sub">今日 ${t.n_today} 則</span><br>
+        <span class="${cls(t.avg_pct || 0)}">${t.avg_pct == null ? "—" : sign(t.avg_pct) + "%"}</span> <span class="sub">題材日漲跌</span>
+      </div>`).join("") + `</div>`;
+    cardsEl.querySelectorAll(".radar-card").forEach(c => c.addEventListener("click", () => showDetail(c.dataset.id)));
+    showDetail(topics[0].id);
+  }
+
+  const hot = d.stocks_hot || [];
+  if (!hot.length) {
+    stocksEl.innerHTML = `<div class="sub">近 3 日無個股被點名</div>`;
+  } else {
+    const body = hot.map((r, i) => {
+      const latest = r.latest
+        ? (r.latest.link ? `<a href="${r.latest.link}" target="_blank" rel="noopener" style="color:var(--muted)">${r.latest.title.slice(0, 32)}…</a>` : `<span class="sub">${r.latest.title.slice(0, 32)}…</span>`)
+        : "—";
+      return `<tr class="radar-hot-row" data-code="${r.code}" data-mkt="${r.market}" title="${fundLine(r.code) || "點擊開 Yahoo 股市"}">
+        <td>${i + 1}. ${r.name} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+        <td class="radar-heat">${r.heat}</td>
+        <td class="${cls(r.pct)}">${sign(r.pct)}%</td><td>${r.close}</td>
+        <td class="${r.f_lots == null ? "sub" : cls(r.f_lots)}">${r.f_lots == null ? "—" : (r.f_lots > 0 ? "+" : "") + r.f_lots.toLocaleString()}${streakBadge(r.f_streak)}</td>
+        <td class="${r.t_lots == null ? "sub" : cls(r.t_lots)}">${r.t_lots == null ? "—" : (r.t_lots > 0 ? "+" : "") + r.t_lots.toLocaleString()}${streakBadge(r.t_streak)}</td>
+        <td style="text-align:left;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${latest}</td></tr>`;
+    }).join("");
+    stocksEl.innerHTML = `<div style="overflow-x:auto"><table style="min-width:760px"><tr><th>個股</th><th>聲量</th><th>漲跌</th><th>收盤</th><th>外資(張)</th><th>投信(張)</th><th style="text-align:left">最新相關標題</th></tr>${body}</table></div>`;
+    stocksEl.querySelectorAll(".radar-hot-row").forEach(tr => tr.addEventListener("click", e => {
+      if (e.target.closest("a")) return;
+      window.open(`https://tw.stock.yahoo.com/quote/${tr.dataset.code}.${tr.dataset.mkt === "tpex" ? "TWO" : "TW"}`, "_blank");
+    }));
+  }
+})();
+
 // ── 排行 ──
 (function () {
   const env = DATA.rank, el = document.getElementById("ranks");
@@ -741,7 +839,7 @@ function fundLine(code) {
 
 // ── 分頁切換 ──
 (function () {
-  const PANES = ["focus", "topics", "chains", "market", "watch", "fund", "news"];
+  const PANES = ["focus", "radar", "topics", "chains", "market", "watch", "fund", "news"];
   function show(id, push) {
     if (!PANES.includes(id)) id = "focus";
     document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "pane-" + id));
@@ -767,7 +865,8 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
-             "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl")}
+             "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
+             "news_radar")}
 
     # 搜尋索引：全市場 4 碼個股 [code, name, industry, close, pct, 市場(t/o)]
     search = []
