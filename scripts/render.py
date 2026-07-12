@@ -18,6 +18,7 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script>(function(){try{var t=localStorage.getItem("twmm_theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <style>
 :root {
   --bg: #04060b; --panel: #0c1422; --panel2: #101b31; --border: #1c2a44; --border-hi: #2e4573;
@@ -28,6 +29,7 @@ TEMPLATE = """<!DOCTYPE html>
   --surface: linear-gradient(180deg, var(--panel2), var(--panel));
   --shadow: 0 12px 32px rgba(0,0,0,.5);
   --num: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --bar-flat: #3a4356;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--fg); font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 0 auto;
@@ -209,12 +211,49 @@ tr:last-child td { border-bottom: none; }
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 @media (max-width: 700px) { .ranks { grid-template-columns: 1fr; } }
 footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1.6; border-top: 1px solid rgba(28,42,68,.5); margin-top: 16px; }
+
+/* ── 淺色主題（--bg 等 token 覆蓋 + 寫死色補丁）── */
+:root { color-scheme: dark; }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f2f5fa; --panel: #ffffff; --panel2: #fbfcfe; --border: #dbe3ef; --border-hi: #b7c5dc;
+  --fg: #17233a; --muted: #5a6a85;
+  --up: #d92d20; --down: #067a5b; --flat: #5a6a85;
+  --warn: #b26a00; --accent: #2563eb; --accent-soft: rgba(37,99,235,.10);
+  --surface: linear-gradient(180deg, #ffffff, #fbfcfe);
+  --shadow: 0 12px 32px rgba(23,35,58,.14);
+  --bar-flat: #c6d0e0;
+}
+:root[data-theme="light"] body { background-image:
+  radial-gradient(900px 360px at 50% -140px, rgba(37,99,235,.08), transparent 70%),
+  linear-gradient(90deg, rgba(37,99,235,.05) 1px, transparent 0),
+  linear-gradient(rgba(37,99,235,.05) 1px, transparent 0); }
+:root[data-theme="light"] header.top { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(183,197,220,.6); }
+:root[data-theme="light"] .tab:hover { background: rgba(37,99,235,.07); }
+:root[data-theme="light"] th { background: rgba(238,243,250,.92); }
+:root[data-theme="light"] th, :root[data-theme="light"] td { border-bottom-color: rgba(219,227,239,.95); }
+:root[data-theme="light"] tr:nth-child(even) td { background: rgba(23,35,58,.025); }
+:root[data-theme="light"] tr:hover td { background: rgba(37,99,235,.06); }
+:root[data-theme="light"] .mops-item, :root[data-theme="light"] .chg-item { border-bottom-color: rgba(219,227,239,.95); }
+:root[data-theme="light"] .co { border-top-color: rgba(219,227,239,.95); }
+:root[data-theme="light"] .radar-card.active { background: linear-gradient(180deg, #e9f0fe, #f6f9ff); }
+:root[data-theme="light"] .sp-cell { background: rgba(242,245,250,.9); }
+:root[data-theme="light"] .node { background: #f6f8fc; }
+:root[data-theme="light"] #sp-overlay { background: rgba(23,35,58,.35); }
+:root[data-theme="light"] .tag.t自結 { color: #1d4ed8; background: rgba(37,99,235,.12); }
+:root[data-theme="light"] .tag.t財務 { color: #7c3aed; background: rgba(124,58,237,.12); }
+:root[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c3cede; border: 2px solid var(--bg); }
+:root[data-theme="light"] .b-bar { box-shadow: inset 0 1px 3px rgba(23,35,58,.15); }
+.hm-cell { color: #f2f5fa; }  /* 熱力圖格內文字固定淺色（色塊深，兩主題皆可讀） */
+.theme-btn { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); width: 34px; height: 31px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; transition: color var(--tr), border-color var(--tr); }
+.theme-btn:hover { color: var(--fg); border-color: var(--border-hi); }
+.theme-btn svg { width: 16px; height: 16px; }
 </style>
 </head>
 <body>
 <header class="top"><div class="top-inner">
   <div class="brand"><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><rect x="0" y="0" width="12" height="9" rx="1.5" fill="#e0433f"/><rect x="13" y="0" width="7" height="9" rx="1.5" fill="#00a37a"/><rect x="0" y="10" width="7" height="10" rx="1.5" fill="#00a37a"/><rect x="8" y="10" width="12" height="10" rx="1.5" fill="#e0433f"/></svg><h1>台股產業地圖</h1><span class="sub">自用・現況呈現・不預測</span>
-    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div></div>
+    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div><button id="theme-btn" class="theme-btn" aria-label="切換深淺色"></button></div>
   <nav class="tabs" id="tabs">
     <button class="tab" data-pane="focus">每日焦點</button>
     <button class="tab" data-pane="radar">時事雷達</button>
@@ -1085,7 +1124,7 @@ function fundLine(code) {
     </div>
     <div class="b-bar">
       <div style="width:${pu}%;background:var(--up)"></div>
-      <div style="width:${pf}%;background:#3a4356"></div>
+      <div style="width:${pf}%;background:var(--bar-flat)"></div>
       <div style="width:${pd}%;background:var(--down)"></div>
     </div>
     <div class="sub">${d.note}｜齊跌+上漲值占比低 = 系統性賣壓；齊漲 = 普漲行情（現況描述，非訊號）</div>
@@ -1179,6 +1218,27 @@ document.addEventListener("click", e => {
   const hc = e.target.closest(".hm-cell[data-code]");
   if (hc) openStock(hc.dataset.code);
 });
+
+// ── 深淺色切換（head 已先定主題防閃爍；這裡只管按鈕與 meta）──
+(function () {
+  const SUN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
+  const MOON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
+  const btn = document.getElementById("theme-btn");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  function paint() {
+    const t = document.documentElement.dataset.theme || "dark";
+    btn.innerHTML = t === "light" ? MOON : SUN;
+    btn.title = t === "light" ? "切到深色" : "切到淺色";
+    meta.setAttribute("content", t === "light" ? "#f2f5fa" : "#04060b");
+  }
+  paint();
+  btn.addEventListener("click", () => {
+    const t = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem("twmm_theme", t);
+    paint();
+  });
+})();
 
 // PWA service worker（GitHub Pages 為 https；本機測試 http 不註冊）
 if ("serviceWorker" in navigator && location.protocol === "https:")
