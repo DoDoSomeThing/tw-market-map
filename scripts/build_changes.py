@@ -150,13 +150,13 @@ def main() -> None:
         up_pct = d.get("up", 0) / n * 100
         uv = d.get("up_value_pct")
         if down_pct >= 60:
-            market_events.append({"t": "breadth", "txt": f"偏空寬度：{down_pct:.0f}% 個股下跌"})
+            market_events.append({"t": "breadth", "list": "top_down", "txt": f"偏空寬度：{down_pct:.0f}% 個股下跌"})
         elif up_pct >= 60:
-            market_events.append({"t": "breadth", "txt": f"普漲行情：{up_pct:.0f}% 個股上漲"})
+            market_events.append({"t": "breadth", "list": "top_up", "txt": f"普漲行情：{up_pct:.0f}% 個股上漲"})
         if (d.get("limit_up") or 0) >= 15:
-            market_events.append({"t": "breadth", "txt": f"漲停 {d['limit_up']} 檔（投機情緒偏熱）"})
+            market_events.append({"t": "breadth", "list": "limit_up", "txt": f"漲停 {d['limit_up']} 檔（投機情緒偏熱）"})
         if uv is not None and (uv <= 30 or uv >= 70):
-            market_events.append({"t": "breadth", "txt": f"上漲成交值占比 {uv}%（{'量能集中弱勢股' if uv <= 30 else '量能集中強勢股'}）"})
+            market_events.append({"t": "breadth", "list": "top_down" if uv <= 30 else "top_up", "txt": f"上漲成交值占比 {uv}%（{'量能集中弱勢股' if uv <= 30 else '量能集中強勢股'}）"})
 
     # 排序：公告 > 法人轉向 > 新聞 > 營收 > 連買達標；同型依成交值
     order = {"mops": 0, "flip": 1, "news": 2, "rev": 3, "streak": 4}

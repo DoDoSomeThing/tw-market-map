@@ -467,6 +467,23 @@ function openStock(code) {
 }
 window.openStock = openStock;
 
+// ── 大盤異動清單面板（漲停股 / 跌幅最大…）→ 每列可再點進個股面板 ──
+const BR_LIST_LABEL = { limit_up: "漲停股", limit_down: "跌停股", top_up: "漲幅最大", top_down: "跌幅最大" };
+function spList(tag) {
+  const rows = (DATA.breadth.ok ? (DATA.breadth.data.lists || {})[tag] : null) || [];
+  if (!rows.length) return;
+  const items = rows.map(r => `<div class="chg-item" onclick="openStock('${r.code}')" style="cursor:pointer">
+    <b>${r.name}</b> <span class="sub">${r.code}</span>
+    <span class="px ${cls(r.pct)}" style="float:right">${sign(r.pct)}%　${r.close}</span></div>`).join("");
+  document.getElementById("sp-panel").innerHTML = `
+    <button class="sp-close" onclick="spClose()">✕</button>
+    <h3>${BR_LIST_LABEL[tag] || "個股清單"} <span class="sub">${rows.length} 檔・資料日 ${DATA.breadth.data_date || ""}</span></h3>
+    <div class="chg-list" style="margin-top:8px">${items}</div>`;
+  document.getElementById("sp-overlay").style.display = "block";
+  document.getElementById("sp-panel").style.display = "block";
+}
+window.spList = spList;
+
 // ── 自選股（localStorage，本機不跨裝置）──
 const WL_KEY = "twmm_watchlist";
 function wlGet() { try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch (e) { return []; } }
@@ -519,7 +536,13 @@ function renderChanges() {
     ${ICON[e.t] || "•"} ${isWl ? `<span class="tag t重大">自選</span>` : ""}<b>${e.name}</b> <span class="sub">${e.code}</span>　${e.txt}</div>`;
   const wlEv = (d.stock_events || []).filter(e => wl.has(e.code));
   const others = (d.stock_events || []).filter(e => !wl.has(e.code));
-  const mk = (d.market_events || []).map(e => `<div class="chg-item" style="cursor:default">⚠️ ${e.txt}</div>`).join("");
+  const brLists = (DATA.breadth.ok ? (DATA.breadth.data.lists || {}) : {});
+  const mk = (d.market_events || []).map(e => {
+    const has = e.list && (brLists[e.list] || []).length;
+    return has
+      ? `<div class="chg-item" onclick="spList('${e.list}')" style="cursor:pointer">⚠️ ${e.txt} <span class="sub">›</span></div>`
+      : `<div class="chg-item" style="cursor:default">⚠️ ${e.txt}</div>`;
+  }).join("");
   const tp = (d.topic_events || []).map(e =>
     `<div class="chg-item" onclick="showTab('radar')">🔥 題材「<b>${e.name}</b>」${e.txt}</div>`).join("");
   const wlHtml = wl.size

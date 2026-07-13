@@ -35,11 +35,25 @@ def main() -> None:
             flat += 1
 
     n = up + down + flat
+
+    # 逐股清單：供「每日焦點」大盤異動點開列出實際個股（前端用 code 進個股面板）
+    def row(s: dict) -> dict:
+        return {"code": s["code"], "name": s["name"], "pct": s["pct"], "close": s["close"]}
+
+    by_pct_desc = sorted(stocks, key=lambda s: s["pct"], reverse=True)
+    lists = {
+        "limit_up": [row(s) for s in by_pct_desc if s["pct"] >= LIMIT_PCT],
+        "limit_down": [row(s) for s in reversed(by_pct_desc) if s["pct"] <= -LIMIT_PCT],
+        "top_up": [row(s) for s in by_pct_desc[:30]],
+        "top_down": [row(s) for s in by_pct_desc[::-1][:30]],
+    }
+
     write_json("breadth", {
         "up": up, "down": down, "flat": flat, "n": n,
         "limit_up": limit_up, "limit_down": limit_down,
         "up_value_pct": round(up_value / total_value * 100, 1) if total_value else None,
         "note": "個股（含產業別、不含 ETF/權證）；漲跌停為 ±9.8% 近似判定",
+        "lists": lists,
     }, data_date=src.get("data_date"), source="daily_all 聚合", error=src.get("error"))
 
 
