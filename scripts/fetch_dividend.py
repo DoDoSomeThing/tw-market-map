@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from tw_common import UA, read_json, write_error, write_json
 
@@ -36,6 +36,14 @@ def roc_to_iso(s: str) -> str | None:
     if not m:
         return None
     return f"{int(m[1]) + 1911:04d}-{int(m[2]):02d}-{int(m[3]):02d}"
+
+
+def last_buy_day(ex_iso: str) -> str:
+    """最後買進日=除息日的前一個「交易日」（跳六日；不含國定連假，故標『約』）。"""
+    d = datetime.strptime(ex_iso, "%Y-%m-%d").date() - timedelta(days=1)
+    while d.weekday() >= 5:   # 5=六、6=日
+        d -= timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
 
 
 def main() -> None:
@@ -71,6 +79,7 @@ def main() -> None:
         close = s.get("close") if s else None
         item = {
             "code": code, "name": name, "ex_date": ex_date, "type": typ,
+            "last_buy": last_buy_day(ex_date),
             "cash": cash, "close": close,
             "industry": s.get("industry") if s else None,
             "yield_pct": round(cash / close * 100, 2) if (cash and close) else None,
@@ -80,7 +89,8 @@ def main() -> None:
         if ex_date >= today:
             cur = by_code.get(code)
             if not cur or ex_date < cur["ex_date"]:
-                by_code[code] = {"ex_date": ex_date, "cash": cash, "type": typ}
+                by_code[code] = {"ex_date": ex_date, "last_buy": last_buy_day(ex_date),
+                                 "cash": cash, "type": typ}
 
     # 近期除息榜：只留今天(含)以後，依除息日近→遠
     upcoming = sorted((it for it in items if it["ex_date"] >= today),

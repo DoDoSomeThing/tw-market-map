@@ -314,7 +314,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 
 <div class="tabpane" id="pane-fund">
 <section id="sec-fund"><h2>基本面速覽 <span class="stamp" data-stamp="fundamentals"></span></h2><div class="sub">季報（TWSE/TPEx openapi）｜殖利率=已公告現金股利÷現價，僅上市（上櫃股利端點無資料）｜排行門檻：日成交值 ≥ 0.5 億</div><div id="fund"></div></section>
-<section id="sec-exdiv"><h2>近期除息（依除息日近→遠） <span class="stamp" data-stamp="dividend"></span></h2><div class="sub">TWSE 除權息預告表｜除息交易日=最後買進日的次一交易日（要參與配息須在除息日前一天收盤前持有）｜殖利率=本次現金股利÷現價｜僅上市（上櫃無資料）｜點列開個股面板</div><div id="exdiv"></div></section>
+<section id="sec-exdiv"><h2>近期除息（依除息日近→遠） <span class="stamp" data-stamp="dividend"></span></h2><div class="sub">TWSE 除權息預告表｜<b>最後買進日</b>＝除息日前一交易日，當天收盤前買到才吃得到這次配息（未扣國定連假，遇連假可能早一天，僅供參考）｜殖利率=本次現金股利÷現價｜僅上市（上櫃無資料）｜點列開個股面板</div><div id="exdiv"></div></section>
 </div>
 
 <div class="tabpane" id="pane-news">
@@ -438,7 +438,8 @@ function openStock(code) {
       ${cell("投信(張)", lotsCell(r[8], r[10]))}
       ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
       ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
-      ${dv ? cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
+      ${dv ? cell("最後買進日", dv.last_buy ? `<b>${dv.last_buy.slice(5).replace("-", "/")}</b>` : "—")
+           + cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
            + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
       ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
            + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
@@ -1073,18 +1074,18 @@ function streakBadge(s) {
   const up = env.data.upcoming || [];
   if (!up.length) { el.innerHTML = `<div class="sub">近期無上市個股除息</div>`; return; }
   const todayISO = new Date().toISOString().slice(0, 10);
-  const dayLabel = iso => {
-    const d = Math.round((new Date(iso + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
-    return d <= 0 ? "今日" : (d === 1 ? "明日" : d + " 天後");
-  };
+  const daysTo = iso => Math.round((new Date(iso + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
+  const dayLabel = iso => { const d = daysTo(iso); return d <= 0 ? "今日" : (d === 1 ? "明日" : d + " 天後"); };
+  const buyLabel = iso => { const d = daysTo(iso); return d < 0 ? `<span class="down">已過</span>` : (d === 0 ? `<span class="up">今日截止</span>` : (d === 1 ? "明日" : d + " 天後")); };
   const body = up.map(r => `<tr style="cursor:pointer" onclick="openStock('${r.code}')" title="${fundLine(r.code) || "點擊開個股面板"}">
     <td>${r.name} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
-    <td><b class="up">${r.ex_date.slice(5).replace("-", "/")}</b> <span class="sub">${dayLabel(r.ex_date)}</span></td>
+    <td>${r.last_buy ? `<b>${r.last_buy.slice(5).replace("-", "/")}</b> <span class="sub">${buyLabel(r.last_buy)}</span>` : "—"}</td>
+    <td><span class="up">${r.ex_date.slice(5).replace("-", "/")}</span></td>
     <td>${r.type}</td>
     <td>${r.cash != null ? r.cash + " 元" : "待公告"}</td>
     <td class="${r.yield_pct ? "up" : "sub"}">${r.yield_pct != null ? r.yield_pct + "%" : "—"}</td>
     <td>${r.close ?? "—"}</td></tr>`).join("");
-  el.innerHTML = `<div style="max-height:460px;overflow:auto"><table class="sticky-head" style="min-width:640px"><tr><th>個股</th><th>除息日</th><th>類型</th><th>本次現金</th><th>殖利率</th><th>現價</th></tr>${body}</table></div>`;
+  el.innerHTML = `<div style="max-height:460px;overflow:auto"><table class="sticky-head" style="min-width:700px"><tr><th>個股</th><th>最後買進日</th><th>除息日</th><th>類型</th><th>本次現金</th><th>殖利率</th><th>現價</th></tr>${body}</table></div>`;
 })();
 
 // ── 基本面速覽 ──
