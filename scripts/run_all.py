@@ -13,6 +13,7 @@ SCRIPTS = [
     "fetch_mops.py",
     "fetch_tdcc.py",
     "fetch_fundamentals.py",
+    "fetch_dividend.py",
     "fetch_news.py",
     "fetch_revenue.py",
     "build_breadth.py",

@@ -312,6 +312,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 </div>
 
 <div class="tabpane" id="pane-fund">
+<section id="sec-exdiv"><h2>近期除息（依除息日近→遠） <span class="stamp" data-stamp="dividend"></span></h2><div class="sub">TWSE 除權息預告表｜除息交易日=最後買進日的次一交易日（要參與配息須在除息日前一天收盤前持有）｜殖利率=本次現金股利÷現價｜僅上市（上櫃無資料）｜點列開個股面板</div><div id="exdiv"></div></section>
 <section id="sec-fund"><h2>基本面速覽 <span class="stamp" data-stamp="fundamentals"></span></h2><div class="sub">季報（TWSE/TPEx openapi）｜殖利率=已公告現金股利÷現價，僅上市（上櫃股利端點無資料）｜排行門檻：日成交值 ≥ 0.5 億</div><div id="fund"></div></section>
 </div>
 
@@ -416,6 +417,7 @@ function openStock(code) {
   if (!r) { window.open(yahoo, "_blank"); return; }
   const f = DATA.fundamentals.ok ? (DATA.fundamentals.data.stocks[code] || {}) : {};
   const rv = DATA.revenue_hl.ok ? (DATA.revenue_hl.data.stocks || {})[code] : null;
+  const dv = DATA.dividend.ok ? (DATA.dividend.data.by_code || {})[code] : null;
   const badges = (IN_TOPIC[code] || []).map(([id, nm]) =>
       `<span class="sr-badge" onclick="spClose();showTab('topics');showTopic('${id}',true)">${nm}</span>`).join(" ")
     + " " + (IN_CHAIN[code] || []).map(([id, nm]) =>
@@ -435,6 +437,8 @@ function openStock(code) {
       ${cell("投信(張)", lotsCell(r[8], r[10]))}
       ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
       ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
+      ${dv ? cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
+           + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
       ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
            + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
     </div>
@@ -1060,6 +1064,28 @@ function streakBadge(s) {
   }).join("") + `</div>`;
 })();
 
+// ── 近期除息 ──
+(function () {
+  const env = DATA.dividend, el = document.getElementById("exdiv");
+  document.querySelector('[data-stamp="dividend"]').innerHTML = stampFor(env, 60);
+  if (!env.ok) { el.innerHTML = `<div class="err">除息資料失敗：${env.error || ""}</div>`; return; }
+  const up = env.data.upcoming || [];
+  if (!up.length) { el.innerHTML = `<div class="sub">近期無上市個股除息</div>`; return; }
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const dayLabel = iso => {
+    const d = Math.round((new Date(iso + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
+    return d <= 0 ? "今日" : (d === 1 ? "明日" : d + " 天後");
+  };
+  const body = up.map(r => `<tr style="cursor:pointer" onclick="openStock('${r.code}')" title="${fundLine(r.code) || "點擊開個股面板"}">
+    <td><b class="up">${r.ex_date.slice(5).replace("-", "/")}</b> <span class="sub">${dayLabel(r.ex_date)}</span></td>
+    <td>${r.name} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+    <td>${r.type}</td>
+    <td>${r.cash != null ? r.cash + " 元" : "待公告"}</td>
+    <td class="${r.yield_pct ? "up" : "sub"}">${r.yield_pct != null ? r.yield_pct + "%" : "—"}</td>
+    <td>${r.close ?? "—"}</td></tr>`).join("");
+  el.innerHTML = `<div style="overflow-x:auto"><table style="min-width:640px"><tr><th>除息日</th><th>個股</th><th>類型</th><th>本次現金</th><th>殖利率</th><th>現價</th></tr>${body}</table></div>`;
+})();
+
 // ── 基本面速覽 ──
 function fundLine(code) {
   const env = DATA.fundamentals;
@@ -1255,7 +1281,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes")}
+             "news_radar", "topic_discover", "changes", "dividend")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
