@@ -129,7 +129,8 @@ tr:last-child td { border-bottom: none; }
 .hm-cell .c-pc { white-space: nowrap; opacity: .9; }
 .hm-cell[data-code] { cursor: pointer; transition: filter .12s ease; }
 .hm-cell[data-code]:hover { filter: brightness(1.3); z-index: 2; }
-.sticky-head th { position: sticky; top: 0; z-index: 1; }
+.sticky-head { overflow: visible; }   /* 覆蓋全域 table overflow:hidden，否則 sticky 黏在不捲動的 table 上失效 */
+.sticky-head thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--border), 0 1px 0 var(--border); }
 
 .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--flat); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
@@ -1085,7 +1086,9 @@ function streakBadge(s) {
     <td>${r.cash != null ? r.cash + " 元" : "待公告"}</td>
     <td class="${r.yield_pct ? "up" : "sub"}">${r.yield_pct != null ? r.yield_pct + "%" : "—"}</td>
     <td>${r.close ?? "—"}</td></tr>`).join("");
-  el.innerHTML = `<div style="max-height:460px;overflow:auto"><table class="sticky-head" style="min-width:700px"><tr><th>個股</th><th>最後買進日</th><th>除息日</th><th>類型</th><th>本次現金</th><th>殖利率</th><th>現價</th></tr>${body}</table></div>`;
+  el.innerHTML = `<div style="max-height:460px;overflow:auto"><table class="sticky-head" style="min-width:700px">
+    <thead><tr><th>個股</th><th>最後買進日</th><th data-dir="asc">除息日</th><th>類型</th><th>本次現金</th><th>殖利率</th><th>現價</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
 })();
 
 // ── 基本面速覽 ──
