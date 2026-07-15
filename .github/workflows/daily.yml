@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30          # reseed（cache miss）約需 ~13 分，多留緩衝
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +27,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      # 滾動 OHLC 視窗跨日保存（不進 git；~7MB gzip）。restore-keys 前綴匹配 → 取回最近一份。
+      # 滾動 OHLC 視窗跨日保存（每日版不進 git；~7MB gzip）。restore-keys 前綴匹配 → 取回最近一份。
       - name: Restore OHLC window cache
         uses: actions/cache/restore@v4
         with:
@@ -36,12 +36,13 @@ jobs:
           restore-keys: |
             ohlc-window-
 
-      # cache miss（首次 / 逾 7 天未存被逐出）→ 自動按日 reseed 重建
-      - name: Seed OHLC window if missing
+      # cache miss（首次 / 逾 7 天未存被逐出）→ 用 repo 內基準檔還原（瞬間、零網路）。
+      # 不在 Actions reseed：資料中心 IP 會被 TWSE/TPEx 限速，逐日抓會 timeout。
+      - name: Restore OHLC window from seed baseline if missing
         run: |
           if [ ! -f data/ohlc_window.json.gz ]; then
-            echo "無視窗快取 → 按日 reseed（~13分）"
-            python scripts/build_ohlc_window.py --seed
+            echo "無視窗快取 → 從種子基準檔還原"
+            cp data/ohlc_window.seed.json.gz data/ohlc_window.json.gz
           fi
 
       - name: Run pipeline

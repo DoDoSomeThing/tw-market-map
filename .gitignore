@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .DS_Store
 
-# 滾動 OHLC 視窗（~7MB gzip，僅供計算不給前端）。不進 git（天天 commit 會膨脹歷史 ~1.7GB/年）；
-# 改由 GitHub Actions cache 跨日滾動保存，cache miss 時自動按日 reseed（~13分）。本機種子產物同樣不追蹤。
+# 滾動 OHLC 視窗（~7MB gzip，僅供計算不給前端）。每日更新版不進 git（天天 commit 會膨脹歷史 ~1.7GB/年）；
+# 改由 GitHub Actions cache 跨日滾動保存，cache miss 時用 repo 內的「種子基準檔」ohlc_window.seed.json.gz
+# 直接複製還原（瞬間、零網路；不在 Actions reseed，資料中心 IP 會被 TWSE/TPEx 限速而 timeout）。
+# 基準檔本身有 commit（一次性 ~7MB），需要時本機 `--seed` 重產後手動更新。
 data/ohlc_window.json.gz
