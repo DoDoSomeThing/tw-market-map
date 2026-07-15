@@ -84,6 +84,19 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .b-bar > div { height: 100%; }
 .b-row { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: .85rem; }
 
+/* 技術狀態篩選 + 個股面板技術面區 */
+.ta-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; font-size: .82rem; color: var(--muted); }
+.ta-filter button { background: var(--panel); border: 1px solid var(--border); color: var(--fg); border-radius: 6px; padding: 3px 10px; font-size: .82rem; font-family: inherit; cursor: pointer; transition: border-color var(--tr); }
+.ta-filter button:hover { border-color: var(--accent); }
+.ta-hd { font-weight: 600; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.ta-block { font-size: .85rem; line-height: 1.7; }
+.ta-line { display: flex; flex-wrap: wrap; gap: 2px 6px; }
+.ta-line .lbl { color: var(--muted); min-width: 62px; display: inline-block; }
+.ta-tags { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 0 2px; }
+.ta-tag { font-size: .76rem; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+.ta-tag.desc { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
+.ta-tag.ref { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+
 /* 營收亮點卡 */
 .rev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 9px; }
 .rev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; font-size: .84rem; line-height: 1.55; cursor: pointer; transition: border-color var(--tr), box-shadow var(--tr); }
@@ -446,6 +459,7 @@ function openStock(code) {
            + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
     </div>
     <div id="sp-inst"></div>
+    <div id="sp-ta"></div>
     ${f.yq ? `<div class="sub">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
     ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
     ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
@@ -463,6 +477,14 @@ function openStock(code) {
     const seq = d.stocks[code];
     el.innerHTML = `<div class="sub" style="padding:2px 0">法人近 ${seq.length} 日買賣超（張）</div>
       <div><span class="sub">外資</span> ${barsSVG(seq.map(x => x[0]))}　<span class="sub">投信</span> ${barsSVG(seq.map(x => x[1]))}</div>`;
+  });
+  loadTa().then(d => {
+    const el = document.getElementById("sp-ta");
+    if (!el || !d || !d.ok) return;
+    const t = (d.data.stocks || {})[code];
+    const mmdd = d.data_date ? d.data_date.slice(5).replace("-", "/") : "?";
+    if (!t) { el.innerHTML = `<div class="ta-block"><div class="sub">技術面：無資料（上市未滿或停牌）</div></div>`; return; }
+    el.innerHTML = `<div class="ta-hd">技術面 <span class="sub">資料日 ${mmdd}</span></div>` + taRowsHTML(t);
   });
 }
 window.openStock = openStock;
@@ -483,6 +505,47 @@ function spList(tag) {
   document.getElementById("sp-panel").style.display = "block";
 }
 window.spList = spList;
+
+// ── 技術狀態篩選清單（ta.json lazy；站上/跌破年線、爆量、多空排列）→ 點列進個股面板 ──
+const TA_LIST = {
+  above_year: ["站上年線", t => t.above && t.above["240"] === true],
+  lose_year:  ["跌破年線", t => t.above && t.above["240"] === false],
+  vol_spike:  ["今日爆量（量比≥2）", t => (t.signals || []).includes("vol_spike")],
+  ma_bull:    ["均線多頭排列", t => (t.signals || []).includes("ma_bull")],
+  ma_bear:    ["均線空頭排列", t => (t.signals || []).includes("ma_bear")],
+};
+function taList(kind) {
+  const spec = TA_LIST[kind];
+  if (!spec) return;
+  const panel = document.getElementById("sp-panel");
+  panel.innerHTML = `<button class="sp-close" onclick="spClose()">✕</button>
+    <h3>${spec[0]} <span class="sub">載入技術面…</span></h3>`;
+  document.getElementById("sp-overlay").style.display = "block";
+  panel.style.display = "block";
+  loadTa().then(d => {
+    if (!d || !d.ok) { panel.querySelector(".sub").textContent = "技術面資料尚未就緒"; return; }
+    const st = d.data.stocks || {};
+    const mmdd = d.data_date ? d.data_date.slice(5).replace("-", "/") : "?";
+    // 命中且在 QUOTES（有股名/收盤/漲跌）；依成交值排序取前 200（避免面板過長）
+    let rows = Object.keys(st).filter(c => spec[1](st[c]) && QUOTES[c])
+      .map(c => ({ c, q: QUOTES[c], t: st[c] }))
+      .sort((a, b) => (b.q[6] || 0) - (a.q[6] || 0));
+    const total = rows.length;
+    rows = rows.slice(0, 200);
+    const items = rows.map(({ c, q, t }) => {
+      const bias = t.bias240 != null ? ` <span class="sub">年線乖離 ${sign(t.bias240)}%</span>` : "";
+      const vr = t.vol_ratio != null ? ` <span class="sub">量比 ${t.vol_ratio}×</span>` : "";
+      return `<div class="chg-item" onclick="openStock('${c}')" style="cursor:pointer">
+        <b>${q[1]}</b> <span class="sub">${c}${q[2] ? "・" + q[2] : ""}</span>${bias}${vr}
+        <span class="px ${cls(q[4])}" style="float:right">${sign(q[4])}%　${q[3]}</span></div>`;
+    }).join("");
+    panel.innerHTML = `<button class="sp-close" onclick="spClose()">✕</button>
+      <h3>${spec[0]} <span class="sub">${total} 檔${total > 200 ? "（顯示成交值前 200）" : ""}・資料日 ${mmdd}</span></h3>
+      <div class="sub" style="padding:2px 0">技術狀態描述，非買賣建議</div>
+      <div class="chg-list" style="margin-top:6px">${items}</div>`;
+  });
+}
+window.taList = taList;
 
 // ── 自選股（localStorage，本機不跨裝置）──
 const WL_KEY = "twmm_watchlist";
@@ -564,6 +627,48 @@ let INST10 = null;
 function loadInst10() {
   if (!INST10) INST10 = fetch("inst10.json").then(r => r.json()).catch(() => null);
   return INST10;
+}
+
+// ── 技術面（ta.json lazy fetch；描述性為主、訊號僅供參考非買賣建議）──
+let TA = null;
+function loadTa() {
+  if (!TA) TA = fetch("ta.json").then(r => r.json()).catch(() => null);
+  return TA;
+}
+// 訊號旗標 → [前端文字, 樣式類]；訊號式(kd_*)用灰底「參考」，不放大
+const TA_SIG = {
+  ma_bull:    ["均線多頭排列", "ta-tag desc"],
+  ma_bear:    ["均線空頭排列", "ta-tag desc"],
+  vol_spike:  ["爆量", "ta-tag desc"],
+  break_year: ["站上年線", "ta-tag desc"],
+  lose_year:  ["跌破年線", "ta-tag desc"],
+  kd_gc:      ["KD 黃金交叉 參考", "ta-tag ref"],
+  kd_dc:      ["KD 死亡交叉 參考", "ta-tag ref"],
+};
+function taRowsHTML(t) {
+  if (!t) return "";
+  const maRow = (lbl, key) => {
+    const v = t.ma[key], ab = t.above[key];
+    if (v == null) return `<div class="ta-line"><span class="lbl">${lbl}</span><span class="sub">—（未滿${key}日）</span></div>`;
+    const st = ab ? `<span class="up">站上</span>` : `<span class="down">跌破</span>`;
+    const bias = key === "240" && t.bias240 != null ? ` <span class="${cls(t.bias240)}">${sign(t.bias240)}%</span>` : "";
+    return `<div class="ta-line"><span class="lbl">${lbl} MA${key}</span>${v}　${st}${bias}</div>`;
+  };
+  const vr = t.vol_ratio != null
+    ? `${t.vol_ratio}×${t.vol_ratio >= 2 ? ` <span class="down">爆量</span>` : ""}` : "—";
+  const pos = t.pos52w != null ? Math.round(t.pos52w * 100) + "%" : "—";
+  const kd = t.kd ? `${t.kd.k}/${t.kd.d}` : "—";
+  const rsi = t.rsi14 != null ? t.rsi14 : "—";
+  const tags = (t.signals || []).map(s => {
+    const m = TA_SIG[s]; return m ? `<span class="${m[1]}">${m[0]}</span>` : "";
+  }).join(" ");
+  return `<div class="ta-block">
+    ${maRow("年線", "240")}${maRow("季線", "60")}${maRow("月線", "20")}
+    <div class="ta-line"><span class="lbl">量比</span>${vr}　<span class="lbl" style="margin-left:10px">52週位置</span>${pos}</div>
+    <div class="ta-line"><span class="lbl">KD</span>${kd}　<span class="lbl" style="margin-left:10px">RSI</span>${rsi}</div>
+    ${tags.trim() ? `<div class="ta-tags">${tags}</div>` : ""}
+    <div class="sub" style="padding-top:4px">訊號僅供參考、非買賣建議</div>
+  </div>`;
 }
 function barsSVG(vals, w = 150, h = 30) {
   const mx = Math.max(...vals.map(v => Math.abs(v)), 1);
@@ -1182,6 +1287,14 @@ function fundLine(code) {
       <div style="width:${pd}%;background:var(--down)"></div>
     </div>
     <div class="sub">${d.note}｜齊跌+上漲值占比低 = 系統性賣壓；齊漲 = 普漲行情（現況描述，非訊號）</div>
+  </div>
+  <div class="ta-filter">技術狀態篩選：
+    <button onclick="taList('above_year')">站上年線</button>
+    <button onclick="taList('lose_year')">跌破年線</button>
+    <button onclick="taList('vol_spike')">今日爆量</button>
+    <button onclick="taList('ma_bull')">多頭排列</button>
+    <button onclick="taList('ma_bear')">空頭排列</button>
+    <span class="sub">技術狀態描述、非買賣建議</span>
   </div>`;
 })();
 
@@ -1362,6 +1475,17 @@ def main() -> None:
             json.dumps({"dates": [f.stem for f in t86_files], "stocks": inst10},
                        ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         print(f"[OK ] docs/inst10.json（{len(inst10)} 檔 × {len(t86_files)} 日）")
+
+    # 技術面 → docs/ta.json（個股面板 + 技術狀態篩選；lazy fetch 單檔，別內嵌撐爆頁面）
+    ta = read_json("ta")
+    if ta.get("ok"):
+        DOCS_DIR.mkdir(parents=True, exist_ok=True)
+        (DOCS_DIR / "ta.json").write_text(
+            json.dumps(ta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        n_ta = len(ta["data"].get("stocks", {}))
+        print(f"[OK ] docs/ta.json（{n_ta} 檔）")
+    data["ta_meta"] = {"ok": ta.get("ok", False), "data_date": ta.get("data_date"),
+                       "note": ta["data"].get("note") if ta.get("ok") else None}
 
     # 基本面全量內嵌（個股面板要查任意個股；只留面板用欄位，gzip 後負擔小）
     fund = data["fundamentals"]

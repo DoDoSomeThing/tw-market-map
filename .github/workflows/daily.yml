@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30          # reseed（cache miss）約需 ~13 分，多留緩衝
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +27,33 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # 滾動 OHLC 視窗跨日保存（不進 git；~7MB gzip）。restore-keys 前綴匹配 → 取回最近一份。
+      - name: Restore OHLC window cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/ohlc_window.json.gz
+          key: ohlc-window-${{ github.run_id }}
+          restore-keys: |
+            ohlc-window-
+
+      # cache miss（首次 / 逾 7 天未存被逐出）→ 自動按日 reseed 重建
+      - name: Seed OHLC window if missing
+        run: |
+          if [ ! -f data/ohlc_window.json.gz ]; then
+            echo "無視窗快取 → 按日 reseed（~13分）"
+            python scripts/build_ohlc_window.py --seed
+          fi
+
       - name: Run pipeline
         run: python scripts/run_all.py
+
+      # 存回今日更新後的視窗（每次 run 唯一 key，滾動前進）
+      - name: Save OHLC window cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/ohlc_window.json.gz
+          key: ohlc-window-${{ github.run_id }}
 
       - name: Commit data + docs
         run: |

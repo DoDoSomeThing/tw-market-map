@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .DS_Store
+
+# 滾動 OHLC 視窗（~7MB gzip，僅供計算不給前端）。不進 git（天天 commit 會膨脹歷史 ~1.7GB/年）；
+# 改由 GitHub Actions cache 跨日滾動保存，cache miss 時自動按日 reseed（~13分）。本機種子產物同樣不追蹤。
+data/ohlc_window.json.gz

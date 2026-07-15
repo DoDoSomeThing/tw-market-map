@@ -72,6 +72,9 @@ def fetch_twse_mi() -> tuple[list[dict], str | None]:
             c_sign, c_diff = idx["漲跌(+/-)"], idx["漲跌價差"]
         except KeyError:
             return [], None  # 欄位改版 → 上層 fallback
+        # OHLC + 成交股數為新增擷取；欄位缺失時個別掛 None（向後相容，不擋收盤資料）
+        c_open = idx.get("開盤價"); c_high = idx.get("最高價")
+        c_low = idx.get("最低價"); c_vol = idx.get("成交股數")
         out = []
         for row in table["data"]:
             close = parse_num(row[c_close])
@@ -91,6 +94,10 @@ def fetch_twse_mi() -> tuple[list[dict], str | None]:
                 "name": str(row[c_name]).strip(),
                 "close": close, "pct": round(pct, 2),
                 "value": parse_num(row[c_val]) or 0.0,
+                "open": parse_num(row[c_open]) if c_open is not None else None,
+                "high": parse_num(row[c_high]) if c_high is not None else None,
+                "low": parse_num(row[c_low]) if c_low is not None else None,
+                "vol": parse_num(row[c_vol]) if c_vol is not None else None,
                 "market": "twse",
             })
         if out:
@@ -119,6 +126,10 @@ def parse_twse(rows: list) -> tuple[list[dict], str | None]:
             "name": str(r.get("Name", "")).strip(),
             "close": close, "pct": round(pct, 2),
             "value": value or 0.0,  # 成交金額(元)
+            "open": parse_num(r.get("OpeningPrice")),
+            "high": parse_num(r.get("HighestPrice")),
+            "low": parse_num(r.get("LowestPrice")),
+            "vol": parse_num(r.get("TradeVolume")),  # 成交股數
             "market": "twse",
         })
     return out, data_date
@@ -137,7 +148,12 @@ def parse_tpex(rows: list) -> tuple[list[dict], str | None]:
         rec = {
             "code": str(r.get("SecuritiesCompanyCode", "")).strip(),
             "name": str(r.get("CompanyName", "")).strip(),
-            "close": close, "value": value or 0.0, "market": "tpex",
+            "close": close, "value": value or 0.0,
+            "open": parse_num(r.get("Open")),
+            "high": parse_num(r.get("High")),
+            "low": parse_num(r.get("Low")),
+            "vol": parse_num(r.get("TradingShares")),  # 成交股數
+            "market": "tpex",
         }
         if change is None:
             # 除權息日 Change 欄是文字（「除息」「除權」）：漲跌無前日可比 → pct 掛 0 並標記，
