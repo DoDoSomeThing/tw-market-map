@@ -97,6 +97,34 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .ta-tag.desc { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
 .ta-tag.ref { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
 
+/* 均線格子 */
+.ma-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+.ma-cell { border: 1px solid var(--border); border-radius: 8px; padding: 7px 6px; text-align: center; background: var(--panel); }
+.ma-cell.up { background: rgba(251,44,54,.10); border-color: rgba(251,44,54,.35); }
+.ma-cell.down { background: rgba(0,187,127,.10); border-color: rgba(0,187,127,.32); }
+.ma-cell .k { font-size: .72rem; color: var(--muted); }
+.ma-cell .v { font-size: .95rem; font-weight: 700; font-family: var(--num); margin: 1px 0; }
+.ma-cell .s { font-size: .72rem; }
+.ma-cell.na { opacity: .5; }
+
+/* 布林迷你通道條 */
+.bb-wrap { margin: 8px 0; }
+.bb-head { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: 3px; }
+.bb-track { position: relative; height: 22px; border-radius: 5px;
+  background: linear-gradient(90deg, rgba(0,187,127,.22), rgba(125,138,160,.12) 50%, rgba(251,44,54,.22)); border: 1px solid var(--border); }
+.bb-mid { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 1px; background: var(--muted); opacity: .6; }
+.bb-dot { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: var(--fg);
+  border: 2px solid var(--bg); transform: translate(-50%, -50%); box-shadow: 0 0 0 1px var(--fg); }
+.bb-scale { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-top: 2px; font-family: var(--num); }
+
+/* KD/RSI 迷你色條 */
+.gauge { margin: 5px 0; }
+.gauge-lbl { display: flex; justify-content: space-between; font-size: .78rem; margin-bottom: 2px; }
+.gauge-lbl b { font-family: var(--num); }
+.gauge-track { position: relative; height: 6px; border-radius: 3px; overflow: hidden;
+  background: linear-gradient(90deg, rgba(0,187,127,.5) 0 20%, rgba(125,138,160,.25) 20% 70%, rgba(251,44,54,.5) 70% 100%); }
+.gauge-dot { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px; background: var(--fg); transform: translateX(-50%); }
+
 /* 營收亮點卡 */
 .rev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 9px; }
 .rev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; font-size: .84rem; line-height: 1.55; cursor: pointer; transition: border-color var(--tr), box-shadow var(--tr); }
@@ -649,38 +677,50 @@ const TA_SIG = {
 };
 function taRowsHTML(t) {
   if (!t) return "";
-  const maRow = (lbl, key) => {
+  // 均線格子（MA5/20/60/240）
+  const MA_LBL = { "5": "MA5 週", "20": "MA20 月", "60": "MA60 季", "240": "MA240 年" };
+  const maCell = key => {
     const v = t.ma[key], ab = t.above[key];
-    if (v == null) return `<div class="ta-line"><span class="lbl">${lbl}</span><span class="sub">—（未滿${key}日）</span></div>`;
-    const st = ab ? `<span class="up">站上</span>` : `<span class="down">跌破</span>`;
-    const bias = key === "240" && t.bias240 != null ? ` <span class="${cls(t.bias240)}">${sign(t.bias240)}%</span>` : "";
-    return `<div class="ta-line"><span class="lbl">${lbl} MA${key}</span>${v}　${st}${bias}</div>`;
+    if (v == null) return `<div class="ma-cell na"><div class="k">${MA_LBL[key]}</div><div class="v">—</div><div class="s sub">未滿</div></div>`;
+    const bias = key === "240" && t.bias240 != null ? `${sign(t.bias240)}%` : (ab ? "站上" : "跌破");
+    return `<div class="ma-cell ${ab ? "up" : "down"}"><div class="k">${MA_LBL[key]}</div>
+      <div class="v">${v}</div><div class="s ${ab ? "up" : "down"}">${bias}</div></div>`;
+  };
+  const maGrid = `<div class="ma-grid">${["5","20","60","240"].map(maCell).join("")}</div>`;
+
+  // 布林迷你通道條：現價點位置 = %B（夾 0~100），衝破/跌破時貼邊
+  let bbBlock = "";
+  if (t.bb) {
+    const b = t.bb;
+    const pos = b.pctb == null ? 50 : Math.max(2, Math.min(98, b.pctb));
+    const where = b.pctb == null ? "" : b.pctb >= 100 ? "衝破上軌" : b.pctb >= 80 ? "接近上軌"
+      : b.pctb <= 0 ? "跌破下軌" : b.pctb <= 20 ? "接近下軌" : "通道中段";
+    bbBlock = `<div class="bb-wrap">
+      <div class="bb-head"><span>布林通道 <span class="sub">帶寬 ${b.width ?? "—"}%</span></span><span>${where}${b.pctb != null ? ` %B ${b.pctb}` : ""}</span></div>
+      <div class="bb-track"><div class="bb-mid"></div><div class="bb-dot" style="left:${pos}%"></div></div>
+      <div class="bb-scale"><span>${b.lower}</span><span>${b.mid}</span><span>${b.upper}</span></div>
+    </div>`;
+  }
+
+  // KD / RSI 迷你色條（0~100，超賣區綠、超買區紅）
+  const gauge = (lbl, val, extra) => {
+    if (val == null) return `<div class="gauge"><div class="gauge-lbl"><span class="lbl">${lbl}</span><span>—</span></div></div>`;
+    return `<div class="gauge"><div class="gauge-lbl"><span class="lbl">${lbl}</span><b>${val}${extra || ""}</b></div>
+      <div class="gauge-track"><div class="gauge-dot" style="left:${Math.max(1, Math.min(99, val))}%"></div></div></div>`;
   };
   const vr = t.vol_ratio != null
     ? `${t.vol_ratio}×${t.vol_ratio >= 2 ? ` <span class="down">爆量</span>` : ""}` : "—";
   const pos = t.pos52w != null ? Math.round(t.pos52w * 100) + "%" : "—";
-  const kd = t.kd ? `${t.kd.k}/${t.kd.d}` : "—";
-  const rsi = t.rsi14 != null ? t.rsi14 : "—";
-  // 布林通道：位置描述（%B<0=跌破下軌、>100=衝破上軌）+ 帶寬（收縮=盤整/醞釀）
-  let bbRow = "";
-  if (t.bb) {
-    const b = t.bb;
-    let where = "通道中段";
-    if (b.pctb != null) {
-      where = b.pctb >= 100 ? "衝破上軌" : b.pctb >= 80 ? "接近上軌"
-            : b.pctb <= 0 ? "跌破下軌" : b.pctb <= 20 ? "接近下軌" : "通道中段";
-    }
-    bbRow = `<div class="ta-line"><span class="lbl">布林通道</span>${b.lower}–${b.mid}–${b.upper}
-      　<span class="sub">${where}${b.pctb != null ? `（%B ${b.pctb}）` : ""}｜帶寬 ${b.width ?? "—"}%</span></div>`;
-  }
+  const kdBlock = t.kd ? gauge(`KD <span class="sub">${t.kd.k}/${t.kd.d}</span>`, t.kd.k) : gauge("KD", null);
+
   const tags = (t.signals || []).map(s => {
     const m = TA_SIG[s]; return m ? `<span class="${m[1]}">${m[0]}</span>` : "";
   }).join(" ");
   return `<div class="ta-block">
-    ${maRow("年線", "240")}${maRow("季線", "60")}${maRow("月線", "20")}${maRow("週線", "5")}
-    ${bbRow}
-    <div class="ta-line"><span class="lbl">量比</span>${vr}　<span class="lbl" style="margin-left:10px">52週位置</span>${pos}</div>
-    <div class="ta-line"><span class="lbl">KD</span>${kd}　<span class="lbl" style="margin-left:10px">RSI</span>${rsi}</div>
+    ${maGrid}
+    ${bbBlock}
+    ${kdBlock}${gauge("RSI", t.rsi14)}
+    <div class="ta-line" style="margin-top:4px"><span class="lbl">量比</span>${vr}　<span class="lbl" style="margin-left:10px">52週位置</span>${pos}</div>
     ${tags.trim() ? `<div class="ta-tags">${tags}</div>` : ""}
     <div class="sub" style="padding-top:4px">訊號僅供參考、非買賣建議</div>
   </div>`;
