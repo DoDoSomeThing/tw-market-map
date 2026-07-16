@@ -19,6 +19,23 @@ def sma(vals: list[float], n: int) -> float | None:
     return round(sum(vals[-n:]) / n, 2) if len(vals) >= n else None
 
 
+def bollinger(closes: list[float], n: int = 20, k: float = 2.0) -> dict | None:
+    """布林通道：中軌=MA20、上下軌=±k×母體標準差(σ)。回 {mid,upper,lower,pctb,width}。
+    %B=(close−下軌)/(上軌−下軌)；帶寬=(上軌−下軌)/中軌×100（判盤整vs收縮）。不足 n 根回 None。"""
+    if len(closes) < n:
+        return None
+    win = closes[-n:]
+    mid = sum(win) / n
+    var = sum((c - mid) ** 2 for c in win) / n     # 母體標準差（與多數看盤軟體一致）
+    sd = var ** 0.5
+    upper, lower = mid + k * sd, mid - k * sd
+    close = closes[-1]
+    pctb = round((close - lower) / (upper - lower) * 100, 1) if upper > lower else None
+    width = round((upper - lower) / mid * 100, 1) if mid else None
+    return {"mid": round(mid, 2), "upper": round(upper, 2), "lower": round(lower, 2),
+            "pctb": pctb, "width": width}
+
+
 def compute_kd(highs, lows, closes, n=9):
     """標準 KD(9,3,3)，初值 50。回 [(k,d), ...] 對齊每根 bar（不足 n 根前為 None）。"""
     out = [None] * len(closes)
@@ -65,10 +82,11 @@ def ta_for(bars: list[dict]) -> dict | None:
     vols = [b.get("v") or 0 for b in bars]
     close = closes[-1]
 
-    ma20, ma60, ma240 = sma(closes, 20), sma(closes, 60), sma(closes, 240)
-    ma = {"20": ma20, "60": ma60, "240": ma240}
+    ma5, ma20, ma60, ma240 = sma(closes, 5), sma(closes, 20), sma(closes, 60), sma(closes, 240)
+    ma = {"5": ma5, "20": ma20, "60": ma60, "240": ma240}
     above = {k: (close >= v) if v is not None else None for k, v in ma.items()}
     bias240 = round((close - ma240) / ma240 * 100, 1) if ma240 else None
+    bb = bollinger(closes)
 
     # 量比 = 今量 / 前 20 日均量（不含今日）
     vol_ratio = None
@@ -114,8 +132,15 @@ def ta_for(bars: list[dict]) -> dict | None:
         elif prev_close >= ma240_prev > close:
             sig.append("lose_year")
 
+    # 布林位置描述（灰底參考，非訊號）：貼上軌 %B≥95、貼下軌 %B≤5
+    if bb and bb["pctb"] is not None:
+        if bb["pctb"] >= 95:
+            sig.append("bb_upper")
+        elif bb["pctb"] <= 5:
+            sig.append("bb_lower")
+
     return {
-        "ma": ma, "above": above, "bias240": bias240,
+        "ma": ma, "above": above, "bias240": bias240, "bb": bb,
         "vol_ratio": vol_ratio, "pos52w": pos52w,
         "kd": kd, "rsi14": rsi14, "signals": sig,
     }

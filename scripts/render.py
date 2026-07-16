@@ -644,6 +644,8 @@ const TA_SIG = {
   lose_year:  ["跌破年線", "ta-tag desc"],
   kd_gc:      ["KD 黃金交叉 參考", "ta-tag ref"],
   kd_dc:      ["KD 死亡交叉 參考", "ta-tag ref"],
+  bb_upper:   ["貼布林上軌 參考", "ta-tag ref"],
+  bb_lower:   ["貼布林下軌 參考", "ta-tag ref"],
 };
 function taRowsHTML(t) {
   if (!t) return "";
@@ -659,11 +661,24 @@ function taRowsHTML(t) {
   const pos = t.pos52w != null ? Math.round(t.pos52w * 100) + "%" : "—";
   const kd = t.kd ? `${t.kd.k}/${t.kd.d}` : "—";
   const rsi = t.rsi14 != null ? t.rsi14 : "—";
+  // 布林通道：位置描述（%B<0=跌破下軌、>100=衝破上軌）+ 帶寬（收縮=盤整/醞釀）
+  let bbRow = "";
+  if (t.bb) {
+    const b = t.bb;
+    let where = "通道中段";
+    if (b.pctb != null) {
+      where = b.pctb >= 100 ? "衝破上軌" : b.pctb >= 80 ? "接近上軌"
+            : b.pctb <= 0 ? "跌破下軌" : b.pctb <= 20 ? "接近下軌" : "通道中段";
+    }
+    bbRow = `<div class="ta-line"><span class="lbl">布林通道</span>${b.lower}–${b.mid}–${b.upper}
+      　<span class="sub">${where}${b.pctb != null ? `（%B ${b.pctb}）` : ""}｜帶寬 ${b.width ?? "—"}%</span></div>`;
+  }
   const tags = (t.signals || []).map(s => {
     const m = TA_SIG[s]; return m ? `<span class="${m[1]}">${m[0]}</span>` : "";
   }).join(" ");
   return `<div class="ta-block">
-    ${maRow("年線", "240")}${maRow("季線", "60")}${maRow("月線", "20")}
+    ${maRow("年線", "240")}${maRow("季線", "60")}${maRow("月線", "20")}${maRow("週線", "5")}
+    ${bbRow}
     <div class="ta-line"><span class="lbl">量比</span>${vr}　<span class="lbl" style="margin-left:10px">52週位置</span>${pos}</div>
     <div class="ta-line"><span class="lbl">KD</span>${kd}　<span class="lbl" style="margin-left:10px">RSI</span>${rsi}</div>
     ${tags.trim() ? `<div class="ta-tags">${tags}</div>` : ""}
