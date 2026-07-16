@@ -63,7 +63,18 @@ jobs:
           git add data/ docs/
           if git diff --cached --quiet; then
             echo "no changes"
-          else
-            git commit -m "auto: daily update $(date +'%Y-%m-%d %H:%M %Z')"
-            git push
+            exit 0
           fi
+          git commit -m "auto: daily update $(date +'%Y-%m-%d %H:%M %Z')"
+          # 本 run 期間若有人 push（2026-07-16 撞過：排程跑到一半被手動 push 插隊）→
+          # push 會 rejected。rebase 後重試；生成檔衝突取本次算好的版本（-X theirs）。
+          for i in 1 2 3; do
+            if git push; then
+              echo "pushed (attempt $i)"
+              exit 0
+            fi
+            echo "push rejected → rebase 後重試 ($i/3)"
+            git pull --rebase -X theirs origin main || git rebase --abort || true
+          done
+          echo "::error::push 連續 3 次失敗"
+          exit 1
