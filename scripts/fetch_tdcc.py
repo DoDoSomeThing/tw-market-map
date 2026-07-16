@@ -14,7 +14,6 @@ from tw_common import DATA_DIR, UA, read_json, write_error, write_json, ymd_to_i
 
 TDCC_URL = "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5"
 HISTORY_DIR = DATA_DIR / "history_tdcc"
-HISTORY_KEEP = 8          # 週資料，留 8 週
 TOP_N = 15
 MIN_TRADE_VALUE = 5e7     # 排行門檻：日成交值 ≥ 5 千萬（殭屍股的大戶比噪音大）
 LEVELS_400 = {"12", "13", "14", "15"}
@@ -73,8 +72,7 @@ def save_snapshot(iso: str, stocks: dict) -> None:
     snap = {c: [v["r400"], v["r1000"]] for c, v in stocks.items()}
     (HISTORY_DIR / f"{iso}.json").write_text(
         json.dumps(snap, separators=(",", ":")), encoding="utf-8")
-    for f in sorted(HISTORY_DIR.glob("????-??-??.json"))[:-HISTORY_KEEP]:
-        f.unlink()
+    # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：週資料、~59KB/支 → 壓縮後 ~1MB/年。
 
 
 def load_prev_snapshot(current_iso: str) -> tuple[dict, str] | None:

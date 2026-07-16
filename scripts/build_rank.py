@@ -8,7 +8,6 @@ from tw_common import DATA_DIR, read_json, write_error, write_json
 TOP_N = 20
 MIN_TRADE_VALUE = 100_000_000  # 排行門檻：日成交值 ≥ 1 億（略過殭屍股/易操縱小型股）
 HISTORY_DIR = DATA_DIR / "history"
-HISTORY_KEEP = 15              # 保留最近 N 份日快照
 
 
 def save_snapshot(data_date: str, stocks: list[dict]) -> None:
@@ -18,9 +17,9 @@ def save_snapshot(data_date: str, stocks: list[dict]) -> None:
     snap = {s["code"]: [s["close"], round(s["value"])] for s in stocks}
     (HISTORY_DIR / f"{data_date}.json").write_text(
         json.dumps(snap, separators=(",", ":")), encoding="utf-8")
-    files = sorted(HISTORY_DIR.glob("????-??-??.json"))
-    for f in files[:-HISTORY_KEEP]:
-        f.unlink()
+    # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：這是唯一保有「成交值」的逐日歷史
+    # （history_ohlc 存的是成交股數）。render 只複製最近 DOCS_HISTORY_KEEP 支進 docs/，
+    # 所以 archive 無限長不會脹到網站。
 
 
 def snap_close(v) -> float | None:

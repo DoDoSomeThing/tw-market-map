@@ -7,6 +7,8 @@ from datetime import datetime
 
 from tw_common import DATA_DIR, DOCS_DIR, read_json
 
+DOCS_HISTORY_KEEP = 30   # docs/history 只放最近 N 支（data/history 為永久 archive，不受此限）
+
 TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -1692,16 +1694,23 @@ def main() -> None:
                                sf, st])
     data["search"] = search
 
-    # 日期回看：history 快照複製進 docs/（Pages 只 serve docs/），並嵌可選日期清單
+    # 日期回看：history 快照複製進 docs/（Pages 只 serve docs/），並嵌可選日期清單。
+    # data/history 是永久 archive（不砍）；docs/ 只放最近 DOCS_HISTORY_KEEP 支——
+    # 否則 docs 與內嵌的 history_dates 會隨累積無限膨脹。
     import shutil
     hist_src = DATA_DIR / "history"
     hist_dst = DOCS_DIR / "history"
     dates = []
     if hist_src.exists():
         hist_dst.mkdir(parents=True, exist_ok=True)
-        for f in sorted(hist_src.glob("????-??-??.json")):
+        keep = sorted(hist_src.glob("????-??-??.json"))[-DOCS_HISTORY_KEEP:]
+        keep_names = {f.name for f in keep}
+        for f in keep:
             shutil.copy2(f, hist_dst / f.name)
             dates.append(f.stem)
+        for old in hist_dst.glob("????-??-??.json"):   # 清掉 docs 內超出保留範圍的舊快照
+            if old.name not in keep_names:
+                old.unlink()
     data["history_dates"] = sorted(dates, reverse=True)
 
     # 法人近 10 日序列 → docs/inst10.json（個股面板柱狀圖；lazy fetch 單檔，別內嵌撐爆頁面）

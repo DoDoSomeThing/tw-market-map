@@ -11,7 +11,6 @@ T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d8}&selectType=ALL&resp
 TPEX_URL = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
 
 HISTORY_DIR = DATA_DIR / "history_t86"
-HISTORY_KEEP = 15
 
 
 def fetch_twse() -> tuple[dict, str] | None:
@@ -86,9 +85,9 @@ def save_snapshot(data_date: str, stocks: dict) -> None:
     snap = {c: [v["f"], v["t"]] for c, v in stocks.items()}
     (HISTORY_DIR / f"{data_date}.json").write_text(
         json.dumps(snap, separators=(",", ":")), encoding="utf-8")
-    files = sorted(HISTORY_DIR.glob("????-??-??.json"))
-    for f in files[:-HISTORY_KEEP]:
-        f.unlink()
+    # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：
+    # 舊檔永不改 → git 只存新增那支（~281KB/天、壓縮後 ~14MB/年）。法人歷史是資產，砍掉就追不回。
+    # 消費端都只讀最近幾支（render inst10 取 [-10:]、build_changes 取 [:8]），累積不影響效能。
 
 
 def main() -> None:

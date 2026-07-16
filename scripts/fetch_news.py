@@ -24,7 +24,6 @@ TOPICS_PATH = ROOT / "topics" / "topics.json"
 HIST_DIR = DATA_DIR / "history_news"
 MAX_TW = 60          # 新聞分頁顯示上限（台股）
 MAX_INTL = 40        # 新聞分頁顯示上限（國際）
-HIST_KEEP_DAYS = 14  # 歷史檔保留天數
 
 
 def fetch_xml(url: str) -> str:
@@ -109,10 +108,8 @@ def save_history(items: list[dict]) -> None:
         merged = old + [it for it in day_items if title_key(it["title"]) not in seen]
         p.write_text(json.dumps(merged, ensure_ascii=False, separators=(",", ":")),
                      encoding="utf-8")
-    cutoff = (datetime.now() - timedelta(days=HIST_KEEP_DAYS)).strftime("%Y-%m-%d")
-    for p in HIST_DIR.glob("????-??-??.json"):
-        if p.stem < cutoff:
-            p.unlink()
+    # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：~102KB/天 → 壓縮後 ~6MB/年。
+    # 消費端都只讀最近幾支（news_radar [:3]、topic_discover dates[:RECENT+BASELINE]），累積不影響效能。
 
 
 def main() -> None:
