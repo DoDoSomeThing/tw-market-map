@@ -1,0 +1,32 @@
+# 統一行尾：repo 內 blob 一律 LF（2026-07-16 起）
+#
+# 緣起：GitHub 網頁「Add files via upload」會把 Windows 檔案原樣（CRLF）存成 blob，
+# 而正常 git push 經 autocrlf 轉成 LF blob。兩種行尾混在同一份歷史後，
+# rebase 會把「整檔 3000+ 行」全判成衝突（實際內容只差幾十行），
+# 每次改 render.py 都要重解一次。此檔強制所有文字檔以 LF 入庫，根除該問題。
+#
+# 注意：往後若仍用 GitHub 網頁上傳，GitHub 會依本檔規則正規化，不會再產生 CRLF blob。
+
+* text=auto eol=lf
+
+# 文字檔（明確指定，避免偵測失誤）
+*.py     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.js     text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+
+# 二進位：不得做任何行尾轉換（轉了會壞檔）
+*.gz     binary
+*.zip    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.ico    binary
+*.pdf    binary
