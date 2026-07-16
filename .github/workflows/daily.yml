@@ -36,13 +36,14 @@ jobs:
           restore-keys: |
             ohlc-window-
 
-      # cache miss（首次 / 逾 7 天未存被逐出）→ 用 repo 內基準檔還原（瞬間、零網路）。
+      # cache miss（首次 / 逾 7 天未存被逐出）→ 由 repo 內 archive（data/history_ohlc/）秒重建。
+      # archive 是永久正本、每日 append-only 累積，永遠比舊的種子基準檔新。
       # 不在 Actions reseed：資料中心 IP 會被 TWSE/TPEx 限速，逐日抓會 timeout。
-      - name: Restore OHLC window from seed baseline if missing
+      - name: Rebuild OHLC window from archive if cache missing
         run: |
           if [ ! -f data/ohlc_window.json.gz ]; then
-            echo "無視窗快取 → 從種子基準檔還原"
-            cp data/ohlc_window.seed.json.gz data/ohlc_window.json.gz
+            echo "無視窗快取 → 由 archive 重建"
+            python scripts/build_ohlc_window.py --from-archive
           fi
 
       - name: Run pipeline

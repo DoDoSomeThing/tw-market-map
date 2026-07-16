@@ -97,6 +97,30 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .ta-tag.desc { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
 .ta-tag.ref { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
 
+/* 布林通道圖（收盤折線＋上/中/下軌，近 60 日） */
+.bb-chart-wrap { margin: 4px 0 2px; }
+.bb-chart { display: block; overflow: visible; }
+.bbc-band { fill: var(--accent-soft); stroke: none; }
+.bbc-edge { fill: none; stroke: var(--accent); stroke-width: 1; opacity: .55; }
+.bbc-mid  { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .8; }
+.bbc-price{ fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.bbc-dot  { fill: var(--fg); }
+.bbc-lbl  { font-size: 9px; fill: var(--muted); font-family: inherit; }
+.bbc-lbl.mid { fill: var(--muted); }
+
+/* 指標說明：hover 提示（.help 虛線底提示可 hover）＋ 可展開說明區（手機用） */
+.help { cursor: help; }
+.help .lbl, span.lbl.help { border-bottom: 1px dotted var(--border); }
+.ta-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; }
+.ta-help-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+  padding: 2px 8px; font-size: .76rem; font-family: inherit; cursor: pointer; white-space: nowrap; }
+.ta-help-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ta-help { margin-top: 8px; padding: 10px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r); font-size: .78rem; line-height: 1.65; color: var(--muted); }
+.ta-help-item { padding: 5px 0; border-top: 1px solid var(--border); }
+.ta-help-item:first-child { border-top: none; padding-top: 0; }
+.ta-help-item b { color: var(--fg); display: block; margin-bottom: 2px; }
+
 /* 均線格子 */
 .ma-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
 .ma-cell { border: 1px solid var(--border); border-radius: 8px; padding: 7px 6px; text-align: center; background: var(--panel); }
@@ -547,6 +571,13 @@ function openStock(code) {
     const mmdd = d.data_date ? d.data_date.slice(5).replace("-", "/") : "?";
     if (!t) { el.innerHTML = `<div class="ta-block"><div class="sub">技術面：無資料（上市未滿或停牌）</div></div>`; return; }
     el.innerHTML = `<div class="ta-hd">技術面 <span class="sub">資料日 ${mmdd}</span></div>` + taRowsHTML(t);
+    // 布林通道圖（另支 lazy fetch，晚到不擋面板其他內容）
+    loadC80().then(cd => {
+      const box = document.getElementById("sp-bbchart");
+      if (!box || !cd || !cd.ok) return;
+      const ser = (cd.data.stocks || {})[code];
+      if (ser && ser.length >= 25) box.innerHTML = bbChartSVG(ser);
+    });
   });
 }
 window.openStock = openStock;
@@ -710,7 +741,104 @@ const TA_SIG = {
   kd_dc:      ["KD 死亡交叉 參考", "ta-tag ref"],
   bb_upper:   ["貼布林上軌 參考", "ta-tag ref"],
   bb_lower:   ["貼布林下軌 參考", "ta-tag ref"],
+  macd_gc:    ["MACD 黃金交叉 參考", "ta-tag ref"],
+  macd_dc:    ["MACD 死亡交叉 參考", "ta-tag ref"],
 };
+// ── 布林通道圖（closes80.json lazy fetch；收盤折線＋上/中/下軌，近 60 日）──
+let C80 = null;
+function loadC80() {
+  if (!C80) C80 = fetch("closes80.json").then(r => r.json()).catch(() => null);
+  return C80;
+}
+// 由 80 根收盤算滾動 MA20±2σ（母體標準差，與 build_ta 一致）→ 回最後 show 天的 {c,mid,up,lo}
+function bbSeries(closes, n = 20, k = 2, show = 60) {
+  const out = [];
+  for (let i = n - 1; i < closes.length; i++) {
+    const w = closes.slice(i - n + 1, i + 1);
+    const mid = w.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(w.reduce((a, b) => a + (b - mid) ** 2, 0) / n);
+    out.push({ c: closes[i], mid, up: mid + k * sd, lo: mid - k * sd });
+  }
+  return out.slice(-show);
+}
+function bbChartSVG(closes, w = 480, h = 150) {
+  const s = bbSeries(closes);
+  if (s.length < 5) return "";
+  const pad = { t: 8, r: 44, b: 6, l: 6 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  const lo = Math.min(...s.map(p => p.lo)), hi = Math.max(...s.map(p => p.up));
+  const rg = (hi - lo) || 1;
+  const X = i => pad.l + i / (s.length - 1) * iw;
+  const Y = v => pad.t + (1 - (v - lo) / rg) * ih;
+  const path = key => s.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[key]).toFixed(1)}`).join("");
+  const band = s.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.up).toFixed(1)}`).join("")
+    + s.slice().reverse().map((p, i) => `L${X(s.length - 1 - i).toFixed(1)},${Y(p.lo).toFixed(1)}`).join("") + "Z";
+  const last = s[s.length - 1];
+  const lbl = (v, cl, txt) => `<text x="${w - pad.r + 3}" y="${(Y(v) + 3).toFixed(1)}" class="bbc-lbl ${cl || ""}">${txt}</text>`;
+  return `<svg class="bb-chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}">
+    <path d="${band}" class="bbc-band"/>
+    <path d="${path("up")}" class="bbc-edge"/>
+    <path d="${path("lo")}" class="bbc-edge"/>
+    <path d="${path("mid")}" class="bbc-mid"/>
+    <path d="${path("c")}" class="bbc-price"/>
+    <circle cx="${X(s.length - 1).toFixed(1)}" cy="${Y(last.c).toFixed(1)}" r="2.5" class="bbc-dot"/>
+    ${lbl(last.up, "", "上軌 " + last.up.toFixed(1))}
+    ${lbl(last.mid, "mid", "中軌 " + last.mid.toFixed(1))}
+    ${lbl(last.lo, "", "下軌 " + last.lo.toFixed(1))}
+  </svg>`;
+}
+
+// 指標說明（描述性：講「是什麼／數值代表什麼」，不喊買賣）
+// hover 用 title 屬性（桌機）；底部「指標說明」可展開（手機也讀得到）
+// 每項存成行陣列 → title 用 &#10; 串（原生 tooltip 換行）、說明區用 <br>。避開跳脫字元問題。
+const TA_HELP = {
+  ma: ["均線＝近 N 個交易日的平均收盤價。MA5 週線、MA20 月線、MA60 季線、MA240 年線。",
+       "現價站上均線＝近期買方成本較低、位置偏強；跌破＝偏弱。",
+       "年線那格的「乖離」＝現價離年均價多遠（+44% 就是比一年均價貴 44%）。"],
+  bb: ["布林通道＝中軌是 20 日均價，上/下軌為中軌 ±2 倍標準差（約 95% 時間在通道內）。",
+       "%B＝現價在通道的位置：0＝貼下軌、50＝中段、100＝貼上軌。",
+       "帶寬＝通道寬度佔中軌的 %：越小＝波動收斂（盤整）、越大＝波動放大。"],
+  kd: ["KD＝近 9 日高低區間中，收盤落在哪（0~100）。",
+       "＞80＝高檔（漲多、過熱區）、＜20＝低檔（跌深、超賣區）、中間＝無明顯偏向。",
+       "K/D 交叉常被當買賣訊號，但大樣本驗過沒有實質優勢 → 這裡只當現象標記。"],
+  rsi: ["RSI＝近 14 日上漲力道占總波動的比例（0~100）。",
+        "＞70＝漲勢強／偏熱、＜30＝跌勢強／超賣、50＝多空均衡。"],
+  macd: ["MACD＝兩條均線的距離，用來看動能轉折。",
+         "DIF＝12 日與 26 日指數均線的差（短期動能）；DEA＝DIF 的 9 日均線（訊號線）；柱＝DIF−DEA。",
+         "柱由負轉正＝短期動能轉強、正轉負＝轉弱；柱越長＝動能越強。",
+         "數值大小隨股價高低而異（高價股數字就大），看方向與變化比看絕對值有意義。"],
+  vr: ["量比＝今日成交量 ÷ 近 20 日平均成交量（不含今日）。",
+       "1×＝與近期均量相當、≥2×＝爆量（通常有消息或事件）、＜0.5×＝量縮冷清。"],
+  pos: ["52 週位置＝現價在過去一年高低區間的哪裡。",
+        "100%＝一年最高價、0%＝一年最低價、50%＝區間正中間。"],
+};
+function helpAttr(k) {
+  const s = (TA_HELP[k] || []).join("&#10;").replace(/"/g, "&quot;");
+  return `title="${s}"`;
+}
+function taHelpHTML() {
+  const item = (name, k) => `<div class="ta-help-item"><b>${name}</b><div>${(TA_HELP[k] || []).join("<br>")}</div></div>`;
+  return `<div class="ta-help" id="ta-help" style="display:none">
+    ${item("均線 MA5/20/60/240 · 乖離", "ma")}
+    ${item("布林通道 · %B · 帶寬", "bb")}
+    ${item("KD", "kd")}
+    ${item("RSI", "rsi")}
+    ${item("MACD · DIF/DEA/柱", "macd")}
+    ${item("量比", "vr")}
+    ${item("52 週位置", "pos")}
+    <div class="sub" style="padding-top:6px">以上皆為現況描述。技術訊號經大樣本驗證無實質優勢，本站不作買賣建議。</div>
+  </div>`;
+}
+function taHelpToggle() {
+  const el = document.getElementById("ta-help");
+  const btn = document.getElementById("ta-help-btn");
+  if (!el) return;
+  const show = el.style.display === "none";
+  el.style.display = show ? "block" : "none";
+  if (btn) btn.textContent = show ? "收合說明" : "ⓘ 指標說明";
+}
+window.taHelpToggle = taHelpToggle;
+
 function taRowsHTML(t) {
   if (!t) return "";
   // 均線格子（MA5/20/60/240）
@@ -722,7 +850,7 @@ function taRowsHTML(t) {
     return `<div class="ma-cell ${ab ? "up" : "down"}"><div class="k">${MA_LBL[key]}</div>
       <div class="v">${v}</div><div class="s ${ab ? "up" : "down"}">${bias}</div></div>`;
   };
-  const maGrid = `<div class="ma-grid">${["5","20","60","240"].map(maCell).join("")}</div>`;
+  const maGrid = `<div class="ma-grid help" ${helpAttr("ma")}>${["5","20","60","240"].map(maCell).join("")}</div>`;
 
   // 布林迷你通道條：現價點位置 = %B（夾 0~100），衝破/跌破時貼邊
   let bbBlock = "";
@@ -731,23 +859,33 @@ function taRowsHTML(t) {
     const pos = b.pctb == null ? 50 : Math.max(2, Math.min(98, b.pctb));
     const where = b.pctb == null ? "" : b.pctb >= 100 ? "衝破上軌" : b.pctb >= 80 ? "接近上軌"
       : b.pctb <= 0 ? "跌破下軌" : b.pctb <= 20 ? "接近下軌" : "通道中段";
-    bbBlock = `<div class="bb-wrap">
-      <div class="bb-head"><span>布林通道 <span class="sub">帶寬 ${b.width ?? "—"}%</span></span><span>${where}${b.pctb != null ? ` %B ${b.pctb}` : ""}</span></div>
-      <div class="bb-track"><div class="bb-mid"></div><div class="bb-dot" style="left:${pos}%"></div></div>
-      <div class="bb-scale"><span>${b.lower}</span><span>${b.mid}</span><span>${b.upper}</span></div>
+    bbBlock = `<div class="bb-wrap help" ${helpAttr("bb")}>
+      <div class="bb-head"><span>布林通道 <span class="sub">近 60 日・帶寬 ${b.width ?? "—"}%</span></span><span>${where}${b.pctb != null ? ` %B ${b.pctb}` : ""}</span></div>
+      <div id="sp-bbchart" class="bb-chart-wrap">
+        <div class="bb-track"><div class="bb-mid"></div><div class="bb-dot" style="left:${pos}%"></div></div>
+        <div class="bb-scale"><span>${b.lower}</span><span>${b.mid}</span><span>${b.upper}</span></div>
+      </div>
     </div>`;
   }
 
   // KD / RSI 迷你色條（0~100，超賣區綠、超買區紅）
-  const gauge = (lbl, val, extra) => {
-    if (val == null) return `<div class="gauge"><div class="gauge-lbl"><span class="lbl">${lbl}</span><span>—</span></div></div>`;
-    return `<div class="gauge"><div class="gauge-lbl"><span class="lbl">${lbl}</span><b>${val}${extra || ""}</b></div>
+  const gauge = (lbl, val, extra, hk) => {
+    const ha = hk ? `class="gauge help" ${helpAttr(hk)}` : `class="gauge"`;
+    if (val == null) return `<div ${ha}><div class="gauge-lbl"><span class="lbl">${lbl}</span><span>—</span></div></div>`;
+    return `<div ${ha}><div class="gauge-lbl"><span class="lbl">${lbl}</span><b>${val}${extra || ""}</b></div>
       <div class="gauge-track"><div class="gauge-dot" style="left:${Math.max(1, Math.min(99, val))}%"></div></div></div>`;
   };
   const vr = t.vol_ratio != null
     ? `${t.vol_ratio}×${t.vol_ratio >= 2 ? ` <span class="down">爆量</span>` : ""}` : "—";
   const pos = t.pos52w != null ? Math.round(t.pos52w * 100) + "%" : "—";
-  const kdBlock = t.kd ? gauge(`KD <span class="sub">${t.kd.k}/${t.kd.d}</span>`, t.kd.k) : gauge("KD", null);
+  const kdBlock = t.kd ? gauge(`KD <span class="sub">${t.kd.k}/${t.kd.d}</span>`, t.kd.k, "", "kd") : gauge("KD", null, "", "kd");
+
+  // MACD(12,26,9)：DIF/DEA + OSC 柱（紅=正、綠=負）。描述數值，交叉標籤走 tags（灰底參考）
+  const macdBlock = t.macd
+    ? `<div class="ta-line help" style="margin-top:4px" ${helpAttr("macd")}><span class="lbl">MACD</span>
+        DIF ${t.macd.dif}　DEA ${t.macd.dea}
+        <span class="lbl" style="margin-left:2px">柱</span><span class="${cls(t.macd.osc)}">${t.macd.osc > 0 ? "+" : ""}${t.macd.osc}</span></div>`
+    : `<div class="ta-line help" style="margin-top:4px" ${helpAttr("macd")}><span class="lbl">MACD</span><span class="sub">—（未滿26日）</span></div>`;
 
   const tags = (t.signals || []).map(s => {
     const m = TA_SIG[s]; return m ? `<span class="${m[1]}">${m[0]}</span>` : "";
@@ -755,10 +893,15 @@ function taRowsHTML(t) {
   return `<div class="ta-block">
     ${maGrid}
     ${bbBlock}
-    ${kdBlock}${gauge("RSI", t.rsi14)}
-    <div class="ta-line" style="margin-top:4px"><span class="lbl">量比</span>${vr}　<span class="lbl" style="margin-left:10px">52週位置</span>${pos}</div>
+    ${kdBlock}${gauge("RSI", t.rsi14, "", "rsi")}
+    ${macdBlock}
+    <div class="ta-line" style="margin-top:4px">
+      <span class="lbl help" ${helpAttr("vr")}>量比</span>${vr}
+      <span class="lbl help" style="margin-left:10px" ${helpAttr("pos")}>52週位置</span>${pos}</div>
     ${tags.trim() ? `<div class="ta-tags">${tags}</div>` : ""}
-    <div class="sub" style="padding-top:4px">訊號僅供參考、非買賣建議</div>
+    <div class="ta-foot"><span class="sub">訊號僅供參考、非買賣建議</span>
+      <button id="ta-help-btn" class="ta-help-btn" onclick="taHelpToggle()">ⓘ 指標說明</button></div>
+    ${taHelpHTML()}
   </div>`;
 }
 // 法人買賣超詳細柱狀圖（每日一根，0 軸，hover 顯示日期+張數；紅買綠賣）
@@ -1590,6 +1733,13 @@ def main() -> None:
         print(f"[OK ] docs/ta.json（{n_ta} 檔）")
     data["ta_meta"] = {"ok": ta.get("ok", False), "data_date": ta.get("data_date"),
                        "note": ta["data"].get("note") if ta.get("ok") else None}
+
+    # 布林通道圖的收盤序列 → docs/closes80.json（lazy fetch，只在點開個股時抓）
+    c80 = read_json("closes80")
+    if c80.get("ok"):
+        (DOCS_DIR / "closes80.json").write_text(
+            json.dumps(c80, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[OK ] docs/closes80.json（{len(c80['data'].get('stocks', {}))} 檔）")
 
     # 基本面全量內嵌（個股面板要查任意個股；只留面板用欄位，gzip 後負擔小）
     fund = data["fundamentals"]

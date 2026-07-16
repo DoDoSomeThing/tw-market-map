@@ -29,10 +29,16 @@ import requests
 import tw_common
 from tw_common import DATA_DIR, UA, parse_num, read_json
 
-N_DAYS = 300                    # 視窗上限。種子先抓~260當底，每日 append 只加不裁直到長到 300 停住
-                                # （MA240 需240根，300=年線+60緩衝；到300再評估要不要更長）
-SEED_DAYS = 260                 # 種子回補的交易日數（底；之後每日 append 長到 N_DAYS 上限）
+# ── 職責分離 ──
+# archive（data/history_ohlc/YYYY-MM-DD.json）＝永久累積的正本：每日一支全市場 OHLCV，
+#   append-only（舊檔永不改）→ git 只存新增那支（raw ~78KB／git 內部壓縮後 ~29KB）。
+#   要更長歷史、換更長指標、或做回測，都從這裡重建。
+# window（ohlc_window.json.gz）＝純計算快取：只留最近 N_DAYS 根給 build_ta 算指標，
+#   gitignore、走 Actions cache；掉了就用 --from-archive 由 archive 秒重建（零網路）。
+N_DAYS = 300                    # 視窗上限（MA240 需240根，300=年線+60緩衝）。archive 不受此限，永久累積
+SEED_DAYS = 260                 # 種子回補的交易日數
 WINDOW_PATH = DATA_DIR / "ohlc_window.json.gz"
+ARCHIVE_DIR = DATA_DIR / "history_ohlc"
 
 # ── 按日種子（TWSE/TPEx，主種子法）──
 TWSE_MI_URL = ("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
@@ -71,6 +77,60 @@ def save_window(win: dict) -> None:
     os.replace(tmp, WINDOW_PATH)
 
 
+# ── archive（永久正本）──
+
+def write_day_snapshot(iso: str, day: dict[str, dict]) -> None:
+    """寫 data/history_ohlc/<iso>.json（全市場當日 OHLCV，append-only）。
+    存未壓縮 JSON：git 內部本來就 zlib 壓（~29KB），檔案還保持可讀。"""
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    out = {c: [b["o"], b["h"], b["l"], b["c"], b.get("v") or 0] for c, b in day.items()}
+    (ARCHIVE_DIR / f"{iso}.json").write_text(
+        json.dumps({"d": iso, "stocks": out}, separators=(",", ":")), encoding="utf-8")
+
+
+def rebuild_from_archive(n: int = N_DAYS) -> int:
+    """由 archive 最近 n 支快照重建視窗（cache miss 時用；零網路、秒級）。"""
+    files = sorted(ARCHIVE_DIR.glob("????-??-??.json"))[-n:] if ARCHIVE_DIR.exists() else []
+    if not files:
+        print("[ERR] archive 空（data/history_ohlc/ 無快照）→ 無法重建，需跑 --seed")
+        return 1
+    stocks: dict[str, list] = {}
+    for f in files:
+        snap = json.loads(f.read_text(encoding="utf-8"))
+        for c, v in snap.get("stocks", {}).items():
+            stocks.setdefault(c, []).append(
+                {"d": snap["d"], "o": v[0], "h": v[1], "l": v[2], "c": v[3], "v": v[4]})
+    for c in stocks:
+        stocks[c] = _trim(stocks[c])
+    win = {"ok": True, "data_date": files[-1].stem, "n_days": N_DAYS,
+           "stocks": stocks, "nodata": []}
+    save_window(win)
+    print(f"[OK ] 由 archive 重建視窗：{len(files)} 支快照 × {len(stocks)} 檔 → {WINDOW_PATH.name}")
+    return 0
+
+
+def materialize_archive() -> int:
+    """一次性：把現有視窗攤成每日快照檔（建立 archive 正本）。已存在的檔不覆蓋。"""
+    win = load_window()
+    stocks = win.get("stocks", {})
+    if not stocks:
+        print("[ERR] 視窗為空，無法攤平")
+        return 1
+    by_date: dict[str, dict] = {}
+    for c, bars in stocks.items():
+        for b in bars:
+            by_date.setdefault(b["d"], {})[c] = b
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    n_new = 0
+    for iso, day in sorted(by_date.items()):
+        if (ARCHIVE_DIR / f"{iso}.json").exists():
+            continue
+        write_day_snapshot(iso, day)
+        n_new += 1
+    print(f"[OK ] archive 攤平完成：新增 {n_new} 支（共 {len(by_date)} 個交易日）→ {ARCHIVE_DIR}")
+    return 0
+
+
 def _trim(bars: list[dict]) -> list[dict]:
     """去重（同日取後者）、依日期排序（舊→新）、裁到最後 N_DAYS 筆。"""
     by_d = {b["d"]: b for b in bars}
@@ -92,6 +152,7 @@ def daily_append() -> int:
 
     win = load_window()
     stocks: dict[str, list] = win.get("stocks", {})
+    today_day: dict[str, dict] = {}      # 今日全市場 → 寫 archive
     added = skipped = 0
     for s in daily["data"].get("stocks", []):
         code = s["code"]
@@ -103,6 +164,7 @@ def daily_append() -> int:
             skipped += 1            # 無 OHLC（如僅收盤的備援日）→ 不塞殘缺 bar
             continue
         bar = {"d": dd, "o": o, "h": h, "l": l, "c": c, "v": v or 0}
+        today_day[code] = bar
         lst = stocks.setdefault(code, [])
         if lst and lst[-1]["d"] == dd:
             lst[-1] = bar           # 同日重跑覆蓋
@@ -111,10 +173,15 @@ def daily_append() -> int:
         stocks[code] = _trim(lst)
         added += 1
 
+    # archive（永久正本）：同日重跑會覆寫同一支，內容一致
+    if today_day:
+        write_day_snapshot(dd, today_day)
+
     win.update({"ok": True, "data_date": dd, "n_days": N_DAYS, "stocks": stocks})
     save_window(win)
+    n_arc = len(list(ARCHIVE_DIR.glob("????-??-??.json"))) if ARCHIVE_DIR.exists() else 0
     print(f"[OK ] ohlc_window append data_date={dd} 更新 {added} 檔（略過無OHLC {skipped}）"
-          f" 總 {len(stocks)} 檔 → {WINDOW_PATH.name}")
+          f" 總 {len(stocks)} 檔；archive 累積 {n_arc} 個交易日")
     return 0
 
 
@@ -338,11 +405,19 @@ def main() -> int:
                     help="一次性種子回補（TWSE/TPEx 按日，建議）")
     ap.add_argument("--seed-finmind", action="store_true",
                     help="一次性種子回補（FinMind 逐檔，備援；需 FINMIND_TOKEN）")
+    ap.add_argument("--from-archive", action="store_true",
+                    help="由 data/history_ohlc/ 重建視窗（cache miss 用；零網路）")
+    ap.add_argument("--materialize-archive", action="store_true",
+                    help="一次性：把現有視窗攤成每日快照檔，建立 archive 正本")
     args = ap.parse_args()
     if args.seed_finmind:
         return seed_finmind()
     if args.seed:
         return seed_bydate()
+    if args.from_archive:
+        return rebuild_from_archive()
+    if args.materialize_archive:
+        return materialize_archive()
     return daily_append()
 
 
