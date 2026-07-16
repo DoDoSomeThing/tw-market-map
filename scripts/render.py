@@ -234,6 +234,21 @@ tr:last-child td { border-bottom: none; }
 .sp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 9px 0; font-size: .84rem; }
 .sp-cell { background: rgba(4,6,11,.55); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; }
 .sp-cell .lbl { color: var(--muted); font-size: .7rem; display: block; }
+/* 雙欄個股面板：左=基本資料+法人、右=技術面+其他 */
+#sp-panel.sp-wide { width: min(880px, 95vw); }
+.sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.sp-two .sp-col { min-width: 0; }
+.sp-two .sp-grid { grid-template-columns: repeat(2, 1fr); }
+.sp-colhd { font-weight: 600; font-size: .82rem; color: var(--muted); padding: 6px 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+/* 法人買賣超詳細圖表（左欄） */
+.inst-chart { margin: 4px 0 2px; }
+.inst-row { display: flex; align-items: center; gap: 6px; }
+.inst-lbl { font-size: .72rem; color: var(--muted); width: 26px; flex: none; }
+.inst-bars { flex: 1; min-width: 0; }
+.inst-sum { font-size: .72rem; font-family: var(--num); width: 64px; text-align: right; flex: none; }
+.inst-axis { display: flex; justify-content: space-between; font-size: .64rem; color: var(--muted); padding: 1px 64px 0 32px; }
+.inst-axis span { flex: 1; text-align: center; }
+@media (max-width: 680px) { #sp-panel.sp-wide { width: 94vw; } .sp-two { grid-template-columns: 1fr; gap: 4px; } .sp-two .sp-grid { grid-template-columns: repeat(3, 1fr); } }
 .sp-close { float: right; background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; font-family: inherit; transition: color var(--tr); }
 .sp-close:hover { color: var(--fg); }
 .spark { vertical-align: middle; }
@@ -468,33 +483,42 @@ function openStock(code) {
   const news = newsFor(code, 3).map(it => `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
     <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`).join("");
   const cell = (lbl, val) => `<div class="sp-cell"><span class="lbl">${lbl}</span>${val}</div>`;
-  document.getElementById("sp-panel").innerHTML = `
+  const panelEl = document.getElementById("sp-panel");
+  panelEl.classList.add("sp-wide");
+  panelEl.innerHTML = `
     <button class="sp-close" onclick="spClose()">✕</button>
     <h3>${r[1]} <span class="sub">${code}${r[2] ? "・" + r[2] : ""}</span>
       <button class="star ${wlHas(code) ? "on" : ""}" data-code="${code}" onclick="wlToggle('${code}')">★</button></h3>
     <div><span class="px ${cls(r[4])}" style="font-size:1.3rem;font-weight:700">${r[3]}</span>
       <span class="${cls(r[4])}">（${sign(r[4])}%）</span> <span id="sp-spark" style="margin-left:8px"></span></div>
-    <div class="sp-grid">
-      ${cell("成交值", r[6] != null ? r[6] + " 億" : "—")}
-      ${cell("外資(張)", lotsCell(r[7], r[9]))}
-      ${cell("投信(張)", lotsCell(r[8], r[10]))}
-      ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
-      ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
-      ${dv ? cell("最後買進日", dv.last_buy ? `<b>${dv.last_buy.slice(5).replace("-", "/")}</b>` : "—")
-           + cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
-           + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
-      ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
-           + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
-    </div>
-    <div id="sp-inst"></div>
-    <div id="sp-ta"></div>
-    ${f.yq ? `<div class="sub">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
-    ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
-    ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
-    <div style="padding-top:10px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
-      <span class="sub">（裝 kanpan 擴充會自動掛面板）</span></div>`;
+    <div class="sp-two">
+      <div class="sp-col">
+        <div class="sp-colhd">基本資料 · 法人</div>
+        <div class="sp-grid">
+          ${cell("成交值", r[6] != null ? r[6] + " 億" : "—")}
+          ${cell("外資(張)", lotsCell(r[7], r[9]))}
+          ${cell("投信(張)", lotsCell(r[8], r[10]))}
+          ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
+          ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
+          ${dv ? cell("最後買進日", dv.last_buy ? `<b>${dv.last_buy.slice(5).replace("-", "/")}</b>` : "—")
+               + cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
+               + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
+          ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
+               + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
+        </div>
+        <div id="sp-inst"></div>
+        ${f.yq ? `<div class="sub" style="padding-top:4px">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
+      </div>
+      <div class="sp-col">
+        <div id="sp-ta"></div>
+        ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
+        ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
+        <div style="padding-top:8px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
+          <span class="sub">（裝 kanpan 擴充會自動掛面板）</span></div>
+      </div>
+    </div>`;
   document.getElementById("sp-overlay").style.display = "block";
-  document.getElementById("sp-panel").style.display = "block";
+  panelEl.style.display = "block";
   seriesFor([code]).then(m => {
     const el = document.getElementById("sp-spark");
     if (el && m[code]) el.innerHTML = sparkSVG(m[code], 140, 30);
@@ -503,8 +527,18 @@ function openStock(code) {
     const el = document.getElementById("sp-inst");
     if (!el || !d || !d.stocks || !d.stocks[code]) return;
     const seq = d.stocks[code];
-    el.innerHTML = `<div class="sub" style="padding:2px 0">法人近 ${seq.length} 日買賣超（張）</div>
-      <div><span class="sub">外資</span> ${barsSVG(seq.map(x => x[0]))}　<span class="sub">投信</span> ${barsSVG(seq.map(x => x[1]))}</div>`;
+    const dates = d.dates || [];
+    const fv = seq.map(x => x[0]), tv = seq.map(x => x[1]);
+    const sum = a => a.reduce((s, v) => s + v, 0);
+    const fs = sum(fv), ts = sum(tv);
+    const tot = v => `${v > 0 ? "+" : ""}${v.toLocaleString()}`;
+    el.innerHTML = `<div class="sp-colhd">法人買賣超 <span class="sub">近 ${seq.length} 日・張・滑過看每日</span></div>
+      <div class="inst-chart">
+        <div class="inst-row"><span class="inst-lbl">外資</span>${instBarsSVG(dates, fv)}<span class="inst-sum ${cls(fs)}">${tot(fs)}</span></div>
+        <div class="inst-row"><span class="inst-lbl">投信</span>${instBarsSVG(dates, tv)}<span class="inst-sum ${cls(ts)}">${tot(ts)}</span></div>
+        <div class="inst-axis">${dates.map(x => `<span>${x.slice(5).replace("-", "/")}</span>`).join("")}</div>
+        <div class="sub" style="padding-top:3px">右側為 ${seq.length} 日累計淨買賣超</div>
+      </div>`;
   });
   loadTa().then(d => {
     const el = document.getElementById("sp-ta");
@@ -525,6 +559,7 @@ function spList(tag) {
   const items = rows.map(r => `<div class="chg-item" onclick="openStock('${r.code}')" style="cursor:pointer">
     <b>${r.name}</b> <span class="sub">${r.code}</span>
     <span class="px ${cls(r.pct)}" style="float:right">${sign(r.pct)}%　${r.close}</span></div>`).join("");
+  document.getElementById("sp-panel").classList.remove("sp-wide");
   document.getElementById("sp-panel").innerHTML = `
     <button class="sp-close" onclick="spClose()">✕</button>
     <h3>${BR_LIST_LABEL[tag] || "個股清單"} <span class="sub">${rows.length} 檔・資料日 ${DATA.breadth.data_date || ""}</span></h3>
@@ -546,6 +581,7 @@ function taList(kind) {
   const spec = TA_LIST[kind];
   if (!spec) return;
   const panel = document.getElementById("sp-panel");
+  panel.classList.remove("sp-wide");
   panel.innerHTML = `<button class="sp-close" onclick="spClose()">✕</button>
     <h3>${spec[0]} <span class="sub">載入技術面…</span></h3>`;
   document.getElementById("sp-overlay").style.display = "block";
@@ -724,6 +760,19 @@ function taRowsHTML(t) {
     ${tags.trim() ? `<div class="ta-tags">${tags}</div>` : ""}
     <div class="sub" style="padding-top:4px">訊號僅供參考、非買賣建議</div>
   </div>`;
+}
+// 法人買賣超詳細柱狀圖（每日一根，0 軸，hover 顯示日期+張數；紅買綠賣）
+function instBarsSVG(dates, vals, w = 300, h = 40) {
+  const mx = Math.max(...vals.map(v => Math.abs(v)), 1);
+  const n = vals.length || 1, bw = w / n, mid = h / 2;
+  const rects = vals.map((v, i) => {
+    const bh = Math.max(1.5, Math.abs(v) / mx * (mid - 2));
+    const y = v >= 0 ? mid - bh : mid;
+    const dt = (dates[i] || "").slice(5).replace("-", "/");
+    return `<rect x="${(i * bw + 2).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(2, bw - 4).toFixed(1)}" height="${bh.toFixed(1)}" fill="${v >= 0 ? "var(--up)" : "var(--down)"}" rx="1"><title>${dt}　${v > 0 ? "+" : ""}${v.toLocaleString()} 張</title></rect>`;
+  }).join("");
+  return `<svg class="inst-bars" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="var(--border)"/>${rects}</svg>`;
 }
 function barsSVG(vals, w = 150, h = 30) {
   const mx = Math.max(...vals.map(v => Math.abs(v)), 1);
