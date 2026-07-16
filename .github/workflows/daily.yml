@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  issues: write        # 失敗時開 Issue 通知（GitHub 會自動寄信/手機推播，零 secrets）
 
 concurrency:
   group: daily-update
@@ -46,8 +47,63 @@ jobs:
             python scripts/build_ohlc_window.py --from-archive
           fi
 
+      # run_all 設計為「單一模組失敗不擋全局」（只有 render 掛才回非 0）→ 綠燈也可能有模組沒抓到，
+      # 那天的 archive 就缺一角且靜默。故這裡另外攔 run_all 印的失敗清單，交給下面開 Issue。
       - name: Run pipeline
-        run: python scripts/run_all.py
+        id: pipeline
+        run: |
+          set -o pipefail
+          python scripts/run_all.py 2>&1 | tee /tmp/pipeline.log
+        continue-on-error: true
+
+      - name: Detect partial failures / data gaps
+        id: check
+        if: always()
+        run: |
+          PARTIAL=""
+          if grep -q "完成但有失敗模組" /tmp/pipeline.log 2>/dev/null; then
+            PARTIAL=$(grep "完成但有失敗模組" /tmp/pipeline.log | head -1)
+          fi
+          # archive 今日快照沒產出 = 永久缺一天（累積型資料最怕靜默缺口）
+          GAP=""
+          TODAY_SNAP=$(ls -t data/history_ohlc/*.json 2>/dev/null | head -1)
+          echo "最新 archive 快照：${TODAY_SNAP:-無}"
+          if [ -z "$TODAY_SNAP" ]; then GAP="archive 無任何快照"; fi
+          {
+            echo "partial=$PARTIAL"
+            echo "gap=$GAP"
+            echo "pipeline_outcome=${{ steps.pipeline.outcome }}"
+          } >> "$GITHUB_OUTPUT"
+
+      # 整體失敗 or 部分模組失敗 or archive 缺口 → 開 Issue（GitHub 自動寄信通知）
+      - name: Notify on failure
+        if: always() && (steps.pipeline.outcome == 'failure' || steps.check.outputs.partial != '' || steps.check.outputs.gap != '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TITLE="❌ daily-update 異常 $(date -u +'%Y-%m-%d')"
+          BODY=$(cat <<EOF
+          每日資料管線有異常，**累積型資料可能缺一天（缺口永久）**，請確認是否需要補跑。
+
+          - pipeline 結果：\`${{ steps.pipeline.outcome }}\`
+          - 部分模組失敗：\`${{ steps.check.outputs.partial }}\`
+          - archive 缺口：\`${{ steps.check.outputs.gap }}\`
+          - Run: $RUN_URL
+
+          補跑方式：Actions → daily-update → Run workflow（同日重跑會覆蓋當日快照）。
+
+          <details><summary>pipeline log 尾段</summary>
+
+          \`\`\`
+          $(tail -30 /tmp/pipeline.log 2>/dev/null || echo "無 log")
+          \`\`\`
+          </details>
+          EOF
+          )
+          gh issue create --title "$TITLE" --body "$BODY" --label "" || \
+            gh issue create --title "$TITLE" --body "$BODY"
+
 
       # 存回今日更新後的視窗（每次 run 唯一 key，滾動前進）
       - name: Save OHLC window cache
@@ -57,7 +113,10 @@ jobs:
           path: data/ohlc_window.json.gz
           key: ohlc-window-${{ github.run_id }}
 
+      # always()：即使 pipeline 有模組失敗也要 commit ——「今日 archive 快照」只存在 runner 上，
+      # 不 commit 就永久缺這天（累積型資料最怕的洞）。工作區乾淨的資料先落地，紅燈留到最後報。
       - name: Commit data + docs
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -78,4 +137,11 @@ jobs:
             git pull --rebase -X theirs origin main || git rebase --abort || true
           done
           echo "::error::push 連續 3 次失敗"
+          exit 1
+
+      # 資料已落地後才報紅燈（render 掛＝沒頁面，workflow 必須顯示失敗）
+      - name: Fail job if pipeline failed
+        if: always() && steps.pipeline.outcome == 'failure'
+        run: |
+          echo "::error::run_all.py 失敗（見上方 log 與已開的 Issue）"
           exit 1
