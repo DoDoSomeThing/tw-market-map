@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bento 改版提案 — 台股產業地圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0e17; --card:#121826; --card2:#161d2e; --line:#232c40; --line-hi:#33415c;
+  --fg:#e8edf5; --muted:#8a97ad;
+  --up:#ff4d4f; --down:#00c98d; --flat:#8a97ad;
+  --brand:#3b82f6; --brand-soft:rgba(59,130,246,.12); --hi:#f59e0b; --hi-soft:rgba(245,158,11,.12);
+  --r:20px; --gap:20px;
+  --sans:"Fira Sans",-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --mono:"Fira Code",ui-monospace,monospace;
+}
+:root[data-theme="light"] {
+  --bg:#f5f5f7; --card:#ffffff; --card2:#fbfcfe; --line:#e5e9f0; --line-hi:#cfd8e6;
+  --fg:#131a26; --muted:#5b6880; --up:#d92d20; --down:#067a5b;
+  --brand:#2563eb; --brand-soft:rgba(37,99,235,.09); --hi:#b45309; --hi-soft:rgba(180,83,9,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding:24px;
+  max-width:1240px;margin:0 auto;line-height:1.5;-webkit-font-smoothing:antialiased}
+.num{font-family:var(--mono);font-feature-settings:"tnum"}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--flat)}
+
+header{display:flex;align-items:baseline;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+h1{font-size:1.3rem;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:.8rem}
+.badge{background:var(--hi-soft);color:var(--hi);font-size:.7rem;padding:3px 10px;
+  border-radius:999px;font-weight:600;margin-left:auto}
+
+/* Bento：卡片大小依重要性，不是把東西塞滿 */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap)}
+.c{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;
+  transition:border-color .2s,transform .2s,box-shadow .2s}
+.c:hover{border-color:var(--line-hi);transform:translateY(-2px);
+  box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.c-2{grid-column:span 2} .c-4{grid-column:span 4}
+.c-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.c-hd h2{font-size:.82rem;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.c-hd .dot{width:6px;height:6px;border-radius:50%;background:var(--brand)}
+.c-hd .when{margin-left:auto;font-size:.68rem;color:var(--muted);font-family:var(--mono)}
+
+/* 主指數：最大、最重 = 視線第一站 */
+.hero .v{font-size:2.6rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.hero .d{font-size:1rem;margin-top:2px}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;
+  padding-top:14px;border-top:1px solid var(--line)}
+.mini div{font-size:.7rem;color:var(--muted)}
+.mini b{display:block;font-size:.95rem;font-weight:600;margin-top:1px}
+
+/* 寬度條 */
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:10px 0 8px}
+.bar i{display:block}
+.wrow{display:flex;justify-content:space-between;font-size:.78rem}
+.big{font-size:1.6rem;font-weight:700;letter-spacing:-.02em}
+
+.spark-bars{width:100%;height:90px;display:block}
+.axis{display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);
+  font-family:var(--mono);margin-top:4px}
+
+/* 排行：不用表格，用列 */
+.rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;background:var(--card);padding:9px 12px;font-size:.85rem;
+  cursor:pointer;transition:background .15s}
+.row:hover{background:var(--card2)}
+.row .rk{font-family:var(--mono);font-size:.7rem;color:var(--muted);width:16px}
+.row .nm{font-weight:500}
+.row .cd{font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+.row .pv{margin-left:auto;font-family:var(--mono);font-weight:600}
+
+.flow-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:.85rem}
+.flow-row .nm{width:78px;font-weight:500}
+.flow-bar{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden;position:relative}
+.flow-bar i{position:absolute;top:0;bottom:0;border-radius:3px}
+.flow-row .v{width:74px;text-align:right;font-family:var(--mono);font-size:.78rem}
+
+.rev{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.rev .k{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rev .k b{font-size:.92rem} .rev .k .y{color:var(--up);font-family:var(--mono);font-weight:600;font-size:1.1rem}
+
+footer{color:var(--muted);font-size:.72rem;margin-top:24px;line-height:1.7}
+@media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.c-2,.c-4{grid-column:span 2}
+  .rev{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){body{padding:14px}.bento{grid-template-columns:1fr}
+  .c-2,.c-4{grid-column:span 1}.rev{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+
+<header>
+  <h1>台股產業地圖</h1><span class="sub">現況呈現 · 不預測</span>
+  <span class="badge">Bento 改版提案</span>
+</header>
+
+<div class="bento">
+
+  <!-- 1. 加權指數：最大卡 = 第一眼 -->
+  <div class="c c-2 hero">
+    <div class="c-hd"><span class="dot"></span><h2>加權指數</h2>
+      <span class="when">07/17</span></div>
+    <div class="v num down">43,853</div>
+    <div class="d num down">-1771.76（-3.88%）</div>
+    <div class="mini">
+      <div>SOX<b class="num down">-4.29%</b></div><div>S&P500<b class="num down">-0.51%</b></div><div>TSM<b class="num down">-2.32%</b></div>
+    </div>
+  </div>
+
+  <!-- 2. 市場寬度：今天多空一眼 -->
+  <div class="c c-2">
+    <div class="c-hd"><span class="dot"></span><h2>市場寬度</h2><span class="when">1951 檔個股</span></div>
+    <div class="big num down">57% <span style="font-size:.9rem;font-weight:400;color:var(--muted)">下跌</span></div>
+    <div class="bar"><i class="" style="width:32.13736545361353%;background:var(--up)"></i>
+      <i style="width:10.661199384930804%;background:var(--line-hi)"></i>
+      <i style="width:57.20143516145566%;background:var(--down)"></i></div>
+    <div class="wrow"><span class="up num">▲ 627</span>
+      <span class="sub num">平 208</span>
+      <span class="down num">▼ 1116</span></div>
+    <div class="mini">
+      <div>漲停<b class="up num">25</b></div>
+      <div>跌停<b class="down num">8</b></div>
+      <div>上漲成交值占比<b class="num">35.3%</b></div>
+    </div>
+  </div>
+
+  <!-- 3. 法人趨勢：近兩週 -->
+  <div class="c c-2">
+    <div class="c-hd"><span class="dot" style="background:var(--hi)"></span><h2>三大法人買賣超</h2>
+      <span class="when">近 14 日</span></div>
+    <div class="big num down">-430.5 億</div>
+    <svg viewBox="0 0 560 90" preserveAspectRatio="none" class="spark-bars"><line x1="0" y1="45.0" x2="560" y2="45.0" stroke="var(--line)"/><rect x="2.5" y="45.0" width="35.0" height="35.0" rx="2" fill="var(--down)"><title>06-26 -2038億</title></rect><rect x="42.5" y="43.0" width="35.0" height="2.0" rx="2" fill="var(--up)"><title>06-29 +56億</title></rect><rect x="82.5" y="42.5" width="35.0" height="2.5" rx="2" fill="var(--up)"><title>06-30 +144億</title></rect><rect x="122.5" y="35.7" width="35.0" height="9.3" rx="2" fill="var(--up)"><title>07-01 +539億</title></rect><rect x="162.5" y="45.0" width="35.0" height="14.3" rx="2" fill="var(--down)"><title>07-02 -834億</title></rect><rect x="202.5" y="45.0" width="35.0" height="12.6" rx="2" fill="var(--down)"><title>07-03 -735億</title></rect><rect x="242.5" y="45.0" width="35.0" height="4.8" rx="2" fill="var(--down)"><title>07-06 -281億</title></rect><rect x="282.5" y="45.0" width="35.0" height="16.1" rx="2" fill="var(--down)"><title>07-07 -938億</title></rect><rect x="322.5" y="45.0" width="35.0" height="7.2" rx="2" fill="var(--down)"><title>07-08 -422億</title></rect><rect x="362.5" y="45.0" width="35.0" height="6.0" rx="2" fill="var(--down)"><title>07-09 -350億</title></rect><rect x="402.5" y="45.0" width="35.0" height="3.1" rx="2" fill="var(--down)"><title>07-13 -181億</title></rect><rect x="442.5" y="45.0" width="35.0" height="13.6" rx="2" fill="var(--down)"><title>07-14 -792億</title></rect><rect x="482.5" y="41.4" width="35.0" height="3.6" rx="2" fill="var(--up)"><title>07-15 +212億</title></rect><rect x="522.5" y="45.0" width="35.0" height="7.4" rx="2" fill="var(--down)"><title>07-16 -430億</title></rect></svg>
+    <div class="axis"><span>06/26</span>
+      <span>07/16</span></div>
+  </div>
+
+  <!-- 4. 融資趨勢 -->
+  <div class="c c-2">
+    <div class="c-hd"><span class="dot" style="background:var(--hi)"></span><h2>融資增減</h2>
+      <span class="when">近 14 日</span></div>
+    <div class="big num up">+1.9 億</div>
+    <svg viewBox="0 0 560 90" preserveAspectRatio="none" class="spark-bars"><line x1="0" y1="45.0" x2="560" y2="45.0" stroke="var(--line)"/><rect x="2.5" y="45.0" width="35.0" height="34.4" rx="2" fill="var(--down)"><title>06-26 -201億</title></rect><rect x="42.5" y="39.3" width="35.0" height="5.7" rx="2" fill="var(--up)"><title>06-29 +33億</title></rect><rect x="82.5" y="15.1" width="35.0" height="29.9" rx="2" fill="var(--up)"><title>06-30 +174億</title></rect><rect x="122.5" y="45.0" width="35.0" height="3.7" rx="2" fill="var(--down)"><title>07-01 -22億</title></rect><rect x="162.5" y="25.6" width="35.0" height="19.4" rx="2" fill="var(--up)"><title>07-02 +113億</title></rect><rect x="202.5" y="27.9" width="35.0" height="17.1" rx="2" fill="var(--up)"><title>07-03 +100億</title></rect><rect x="242.5" y="43.0" width="35.0" height="2.0" rx="2" fill="var(--up)"><title>07-06 +5億</title></rect><rect x="282.5" y="45.0" width="35.0" height="35.0" rx="2" fill="var(--down)"><title>07-07 -204億</title></rect><rect x="322.5" y="40.1" width="35.0" height="4.9" rx="2" fill="var(--up)"><title>07-08 +29億</title></rect><rect x="362.5" y="35.0" width="35.0" height="10.0" rx="2" fill="var(--up)"><title>07-09 +58億</title></rect><rect x="402.5" y="45.0" width="35.0" height="2.3" rx="2" fill="var(--down)"><title>07-13 -14億</title></rect><rect x="442.5" y="45.0" width="35.0" height="24.5" rx="2" fill="var(--down)"><title>07-14 -143億</title></rect><rect x="482.5" y="25.6" width="35.0" height="19.4" rx="2" fill="var(--up)"><title>07-15 +113億</title></rect><rect x="522.5" y="43.0" width="35.0" height="2.0" rx="2" fill="var(--up)"><title>07-16 +2億</title></rect></svg>
+    <div class="axis"><span>06/26</span>
+      <span>07/16</span></div>
+  </div>
+
+  <!-- 5. 資金流 -->
+  <div class="c c-2">
+    <div class="c-hd"><span class="dot"></span><h2>外資產業資金流</h2><span class="when">今日</span></div>
+    <div class="flow-row"><span class="nm">通信網路</span>
+      <span class="flow-bar"><i style="left:50%;width:50%;background:var(--up)"></i></span>
+      <span class="v up">+28億</span></div><div class="flow-row"><span class="nm">金融保險</span>
+      <span class="flow-bar"><i style="left:50%;width:45%;background:var(--up)"></i></span>
+      <span class="v up">+25億</span></div><div class="flow-row"><span class="nm">電腦週邊</span>
+      <span class="flow-bar"><i style="left:50%;width:38%;background:var(--up)"></i></span>
+      <span class="v up">+21億</span></div><div class="flow-row"><span class="nm">航運</span>
+      <span class="flow-bar"><i style="left:50%;width:17%;background:var(--up)"></i></span>
+      <span class="v up">+10億</span></div><div class="flow-row"><span class="nm">綠能環保</span>
+      <span class="flow-bar"><i style="left:50%;width:13%;background:var(--up)"></i></span>
+      <span class="v up">+7億</span></div>
+  </div>
+
+  <!-- 6. 強勢股 -->
+  <div class="c c-2">
+    <div class="c-hd"><span class="dot"></span><h2>今日強勢</h2><span class="when">成交值 ≥1億</span></div>
+    <div class="rows">
+      <div class="row"><span class="rk">1</span><span class="nm">巨大</span>
+        <span class="cd">9921</span><span class="pv up">+10.00%</span></div><div class="row"><span class="rk">2</span><span class="nm">慶騰</span>
+        <span class="cd">4534</span><span class="pv up">+10.00%</span></div><div class="row"><span class="rk">3</span><span class="nm">宏璟</span>
+        <span class="cd">2527</span><span class="pv up">+9.99%</span></div><div class="row"><span class="rk">4</span><span class="nm">迅杰</span>
+        <span class="cd">6243</span><span class="pv up">+9.98%</span></div><div class="row"><span class="rk">5</span><span class="nm">大甲</span>
+        <span class="cd">2221</span><span class="pv up">+9.98%</span></div><div class="row"><span class="rk">6</span><span class="nm">竹陞科技</span>
+        <span class="cd">6739</span><span class="pv up">+9.95%</span></div>
+    </div>
+  </div>
+
+  <!-- 7. 營收亮點 -->
+  <div class="c c-4">
+    <div class="c-hd"><span class="dot" style="background:var(--hi)"></span><h2>營收亮點</h2>
+      <span class="when">2026/6月</span></div>
+    <div class="rev">
+      <div class="k"><b>潤隆</b> <span class="cd num" style="color:var(--muted);font-size:.7rem">1808</span>
+        <div class="y">+162537.3%</div><div class="sub num">營收 30.7 億</div></div><div class="k"><b>遠雄</b> <span class="cd num" style="color:var(--muted);font-size:.7rem">5522</span>
+        <div class="y">+2513.5%</div><div class="sub num">營收 19.9 億</div></div><div class="k"><b>達麗</b> <span class="cd num" style="color:var(--muted);font-size:.7rem">6177</span>
+        <div class="y">+1322.2%</div><div class="sub num">營收 25.0 億</div></div><div class="k"><b>方土昶</b> <span class="cd num" style="color:var(--muted);font-size:.7rem">6265</span>
+        <div class="y">+1209.5%</div><div class="sub num">營收 6.2 億</div></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Bento Grid 提案 · 卡片大小依重要性配置（加權指數/市場寬度最大）· Fira Sans + Fira Code（數字等寬）·
+  藍=資料、琥珀=需注意<br>
+  資料為真實值，產生於 2026-07-17 11:53 · 僅為版面提案，未接管線
+</footer>
+</body></html>

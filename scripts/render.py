@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from tw_common import DATA_DIR, DOCS_DIR, read_json
+from tw_common import DATA_DIR, DOCS_DIR, read_json, tw_now
 
 DOCS_HISTORY_KEEP = 30   # docs/history 只放最近 N 支（data/history 為永久 archive，不受此限）
 
@@ -14,6 +14,10 @@ TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Fira Sans/Code：dashboard 專用字組，數字等寬對齊；載不到時 fallback 系統字（見 --sans/--num） -->
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <title>台股產業地圖</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#05070d">
@@ -22,28 +26,37 @@ TEMPLATE = """<!DOCTYPE html>
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>(function(){try{var t=localStorage.getItem("twmm_theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <style>
+/* 設計系統（2026-07-17 Bento 改版）— 依 ui-ux-pro-max 對 fintech dashboard 的建議：
+   Bento Grid（高資訊密度但不雜亂）＋ Fira Sans/Fira Code（數字等寬=金融標配）
+   ＋ 藍=資料、琥珀=需注意（給視線一個落點，解決「everything same weight」）。
+   全站樣式走這組變數 → 改這裡即改七個分頁。 */
 :root {
-  --bg: #04060b; --panel: #0c1422; --panel2: #101b31; --border: #1c2a44; --border-hi: #2e4573;
-  --fg: #e8eef6; --muted: #8593ab;
-  --up: #ff453a; --down: #00c98d; --flat: #8593ab; /* 台股紅漲綠跌 */
-  --warn: #ffab24; --accent: #4c8dff; --accent-soft: rgba(76,141,255,.13);
-  --r: 10px; --tr: .18s ease;
-  --surface: linear-gradient(180deg, var(--panel2), var(--panel));
-  --shadow: 0 12px 32px rgba(0,0,0,.5);
-  --num: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-  --bar-flat: #3a4356;
+  --bg: #0a0e17; --panel: #121826; --panel2: #161d2e; --border: #232c40; --border-hi: #33415c;
+  --fg: #e8edf5; --muted: #8a97ad;
+  --up: #ff4d4f; --down: #00c98d; --flat: #8a97ad; /* 台股紅漲綠跌 */
+  --warn: #f59e0b; --accent: #3b82f6; --accent-soft: rgba(59,130,246,.12);
+  --hi: #f59e0b; --hi-soft: rgba(245,158,11,.12);   /* 琥珀：需注意/次要焦點 */
+  --r: 18px; --r-sm: 12px; --gap: 16px; --tr: .2s ease;
+  --surface: var(--panel);
+  --shadow: 0 8px 28px rgba(0,0,0,.28);
+  --num: "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Fira Sans", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --bar-flat: #33415c;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--fg); font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 0 auto;
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); margin: 0 auto;
   -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
-  background-image:
-    radial-gradient(900px 360px at 50% -140px, rgba(76,141,255,.13), transparent 70%),
-    linear-gradient(90deg, rgba(76,141,255,.04) 1px, transparent 0),
-    linear-gradient(rgba(76,141,255,.04) 1px, transparent 0);
-  background-size: 100% 100%, 42px 42px, 42px 42px; }
-h1 { font-size: 1.12rem; letter-spacing: .02em; }
-h2 { font-size: 1rem; padding: 16px 0 8px; color: var(--fg); }
-h2::before { content: ""; display: inline-block; width: 3px; height: 13px; border-radius: 2px; background: var(--accent); margin-right: 8px; vertical-align: -1px; }
+  /* 區塊改卡片後，格線與卡片邊框會互相打架 → 只留頂部一道柔光，其餘乾淨 */
+  background-image: radial-gradient(1000px 400px at 50% -160px, rgba(59,130,246,.10), transparent 70%);
+  background-repeat: no-repeat; }
+h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.01em; }
+/* 區塊＝一張 Bento 卡（不再是裸區塊直接堆）→ 密度不變但有邊界、不糊在一起 */
+section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 16px 18px; margin-bottom: var(--gap); transition: border-color var(--tr); }
+section:hover { border-color: var(--border-hi); }
+h2 { font-size: .82rem; font-weight: 600; padding: 0 0 10px; color: var(--muted); letter-spacing: .02em; }
+h2::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; vertical-align: 1px; }
 
 /* 捲軸 / 鍵盤焦點 / 減少動態 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -73,11 +86,15 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .searchwrap { position: relative; margin-left: auto; }
 #search { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); padding: 6px 11px; font-size: .85rem; width: 172px; font-family: inherit; transition: border-color var(--tr), box-shadow var(--tr); }
 #search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-#search-res { position: absolute; right: 0; top: 38px; background: var(--surface); border: 1px solid var(--border-hi); border-radius: var(--r); min-width: 300px; max-height: 320px; overflow-y: auto; display: none; z-index: 60; box-shadow: var(--shadow); }
-.sr-item { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: .85rem; display: flex; gap: 8px; align-items: center; transition: background var(--tr); }
+#search-res { position: absolute; right: 0; top: 38px; background: var(--surface); border: 1px solid var(--border-hi); border-radius: var(--r); min-width: 340px; max-width: min(420px, 92vw); max-height: 340px; overflow-y: auto; display: none; z-index: 60; box-shadow: var(--shadow); }
+.sr-item { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: .85rem; transition: background var(--tr); }
 .sr-item:hover { background: var(--accent-soft); }
 .sr-item:last-child { border-bottom: none; }
-.sr-badge { font-size: .68rem; border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; color: var(--muted); cursor: pointer; transition: color var(--tr), border-color var(--tr); }
+/* 上列固定一行：股名不可被壓縮（題材多的股票如 2408 曾被徽章擠成直書）；徽章另起一列自己 wrap */
+.sr-top { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.sr-top > b, .sr-top > .sub { flex: none; }
+.sr-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.sr-badge { flex: none; white-space: nowrap; font-size: .68rem; border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; color: var(--muted); cursor: pointer; transition: color var(--tr), border-color var(--tr); }
 .sr-badge:hover { border-color: var(--accent); color: var(--accent); }
 
 /* 市場寬度 */
@@ -166,23 +183,26 @@ section { margin-bottom: 14px; }
 .err { color: var(--warn); background: var(--panel); border: 1px solid rgba(255,171,36,.45); border-radius: var(--r); padding: 10px; font-size: .85rem; }
 
 /* 指數卡 */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 11px; }
-.card .nm { font-size: .8rem; color: var(--muted); }
-.card .px { font-size: 1.18rem; font-weight: 700; margin-top: 2px; font-family: var(--num); letter-spacing: -.01em; }
-.card .chg { font-size: .85rem; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--gap); }
+.card { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 13px 14px;
+  transition: border-color var(--tr), transform var(--tr); }
+.card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
+.card .nm { font-size: .74rem; color: var(--muted); }
+.card .px { font-size: 1.45rem; font-weight: 700; margin-top: 3px; font-family: var(--num); letter-spacing: -.02em; }
+.card .chg { font-size: .82rem; font-family: var(--num); }
 
 /* 法人/資券 + 全站表格 */
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
 @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; font-size: .85rem; }
-th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid rgba(28,42,68,.55); }
+/* 表格：區塊已是卡片 → 表格本身脫掉外框/底色，改用細分隔線＋留白（去「報表感」的關鍵） */
+table { width: 100%; border-collapse: separate; border-spacing: 0; background: transparent; border: none; border-radius: var(--r-sm); overflow: hidden; font-size: .85rem; }
+th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); }
 th:first-child, td:first-child { text-align: left; }
-th { color: var(--muted); font-weight: 600; font-size: .74rem; letter-spacing: .04em; background: rgba(16,27,49,.85); user-select: none; cursor: pointer; }
+th { color: var(--muted); font-weight: 500; font-size: .7rem; letter-spacing: .04em; background: transparent; user-select: none; cursor: pointer; border-bottom-color: var(--border-hi); }
 th[data-dir="desc"]::after { content: " ▾"; color: var(--accent); }
 th[data-dir="asc"]::after { content: " ▴"; color: var(--accent); }
-tr:nth-child(even) td { background: rgba(255,255,255,.015); }
-tr:hover td { background: rgba(76,141,255,.06); }
+tr:nth-child(even) td { background: transparent; }   /* 斑馬紋拿掉：卡片＋分隔線已足夠，斑馬紋讓畫面更吵 */
+tr:hover td { background: var(--accent-soft); }
 tr:last-child td { border-bottom: none; }
 
 /* 熱力圖 */
@@ -277,6 +297,15 @@ tr:last-child td { border-bottom: none; }
 .sp-two .gauge { margin: 3px 0; }
 .sp-two .inst-chart { margin: 2px 0; }
 .sp-two .news-links .mops-item { padding: 4px 8px; line-height: 1.4; }
+/* 大盤法人/資券 近兩週趨勢柱狀圖 */
+.trend { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin-top: 8px; }
+.trend-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .85rem; margin-bottom: 6px; }
+.trend-hd b { font-size: .92rem; }
+.trend-today { margin-left: auto; font-family: var(--num); font-weight: 700; }
+.trend-svg { width: 100%; height: 96px; display: block; }
+.trend-svg .bar:hover { opacity: .75; }
+.trend-axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--muted); padding-top: 2px; }
+
 /* 法人買賣超詳細圖表（左欄） */
 .inst-chart { margin: 4px 0 2px; }
 .inst-row { display: flex; align-items: center; gap: 6px; }
@@ -315,13 +344,14 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 :root { color-scheme: dark; }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f2f5fa; --panel: #ffffff; --panel2: #fbfcfe; --border: #dbe3ef; --border-hi: #b7c5dc;
-  --fg: #17233a; --muted: #5a6a85;
-  --up: #d92d20; --down: #067a5b; --flat: #5a6a85;
-  --warn: #b26a00; --accent: #2563eb; --accent-soft: rgba(37,99,235,.10);
-  --surface: linear-gradient(180deg, #ffffff, #fbfcfe);
-  --shadow: 0 12px 32px rgba(23,35,58,.14);
-  --bar-flat: #c6d0e0;
+  --bg: #f5f5f7; --panel: #ffffff; --panel2: #fbfcfe; --border: #e5e9f0; --border-hi: #cfd8e6;
+  --fg: #131a26; --muted: #5b6880;
+  --up: #d92d20; --down: #067a5b; --flat: #5b6880;
+  --warn: #b45309; --accent: #2563eb; --accent-soft: rgba(37,99,235,.09);
+  --hi: #b45309; --hi-soft: rgba(180,83,9,.10);
+  --surface: #ffffff;
+  --shadow: 0 8px 28px rgba(23,35,58,.10);
+  --bar-flat: #cfd8e6;
 }
 :root[data-theme="light"] body { background-image:
   radial-gradient(900px 360px at 50% -140px, rgba(37,99,235,.08), transparent 70%),
@@ -374,7 +404,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
 <section id="sec-revhl"><h2>營收亮點 <span class="stamp" data-stamp="revenue_hl"></span></h2><div class="sub" id="revhl-sub"></div><div id="revhl"></div></section>
-<section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
+<section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div><div id="market-trend"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
 </div>
@@ -1054,6 +1084,51 @@ document.addEventListener("click", e => {
     <div style="margin-top:8px">${marginHtml}</div>`;
 })();
 
+// ── 大盤法人/資券 近兩週趨勢柱狀圖（官方 BFI82U / MI_MARGN；現況呈現非訊號）──
+function trendSVG(series, key, unit) {
+  const vals = series.map(s => s[key]).filter(v => v != null);
+  if (vals.length < 2) return null;
+  const W = 640, H = 96, mid = H / 2, n = series.length, bw = W / n;
+  const mx = Math.max(...vals.map(Math.abs), 1);
+  const bars = series.map((s, i) => {
+    const v = s[key];
+    if (v == null) return "";
+    const bh = Math.max(1.5, Math.abs(v) / mx * (mid - 12));
+    const y = v >= 0 ? mid - bh : mid;
+    const lbl = Math.abs(v) >= mx * 0.55 ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${(v >= 0 ? y - 3 : y + bh + 9).toFixed(1)}"
+        text-anchor="middle" font-size="9" fill="${v >= 0 ? "var(--up)" : "var(--down)"}">${v > 0 ? "+" : ""}${Math.round(v)}</text>` : "";
+    return `<g class="bar"><rect x="${(i * bw + 2.5).toFixed(1)}" y="${y.toFixed(1)}"
+      width="${Math.max(2, bw - 5).toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5"
+      fill="${v >= 0 ? "var(--up)" : "var(--down)"}"><title>${s.date.slice(5).replace("-", "/")}　${v > 0 ? "+" : ""}${v}${unit}</title></rect>${lbl}</g>`;
+  }).join("");
+  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="var(--border-hi)"/>${bars}</svg>`;
+}
+function trendBlock(env, key, title, hint, unit) {
+  if (!env.ok) return "";
+  const s = env.data.series || [];
+  const svg = trendSVG(s, key, unit);
+  if (!svg) return "";
+  const last = [...s].reverse().find(x => x[key] != null);
+  const v = last ? last[key] : null;
+  const dates = s.filter(x => x[key] != null).map(x => x.date);
+  const tick = i => (dates[i] || "").slice(5).replace("-", "/");
+  return `<div class="trend">
+    <div class="trend-hd"><b>${title}</b><span class="sub">近 ${dates.length} 個交易日・${hint}</span>
+      <span class="trend-today ${cls(v || 0)}">今日 ${v > 0 ? "+" : ""}${v}${unit}</span></div>
+    ${svg}
+    <div class="trend-axis"><span>${tick(0)}</span><span>${tick(Math.floor(dates.length / 2))}</span><span>${tick(dates.length - 1)}</span></div>
+  </div>`;
+}
+(function () {
+  const env = DATA.market_trend, el = document.getElementById("market-trend");
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="sub">趨勢資料累積中</div>`; return; }
+  el.innerHTML =
+    trendBlock(env, "total", "每日三大法人買賣超", "買超↑賣超↓（上市合計）", "億") +
+    trendBlock(env, "margin_chg", "每日融資增減", "增資↑減資↓", "億");
+})();
+
 // ── 熱力圖（squarified treemap，手刻無依賴）──
 function squarify(items, x, y, w, h, out) {
   // items: [{v, ...}] 已依 v 降冪。經典 squarify：逐列塞，長寬比最平衡時換列。
@@ -1635,9 +1710,11 @@ function fundLine(code) {
         + (IN_CHAIN[r[0]] || []).map(([id, nm]) =>
           `<span class="sr-badge" data-c="${id}">${nm}</span>`).join("");
       return `<div class="sr-item" data-code="${r[0]}" data-mkt="${r[5]}">
-        <b>${r[1]}</b><span class="sub">${r[0]}${r[2] ? "・" + r[2] : ""}</span>
-        <span class="${cls(r[4])}" style="margin-left:auto">${r[3]}（${sign(r[4])}%）</span>
-        <button class="star ${wlHas(r[0]) ? "on" : ""}" data-code="${r[0]}" onclick="event.stopPropagation();wlToggle('${r[0]}')">★</button>${badges}</div>`;
+        <div class="sr-top">
+          <b>${r[1]}</b><span class="sub">${r[0]}${r[2] ? "・" + r[2] : ""}</span>
+          <span class="${cls(r[4])}" style="margin-left:auto">${r[3]}（${sign(r[4])}%）</span>
+          <button class="star ${wlHas(r[0]) ? "on" : ""}" data-code="${r[0]}" onclick="event.stopPropagation();wlToggle('${r[0]}')">★</button>
+        </div>${badges ? `<div class="sr-tags">${badges}</div>` : ""}</div>`;
     }).join("");
     res.style.display = "block";
     res.querySelectorAll(".sr-item[data-code]").forEach(it => it.addEventListener("click", e => {
@@ -1718,7 +1795,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes", "dividend", "valuation")}
+             "news_radar", "topic_discover", "changes", "dividend", "valuation", "market_trend")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
@@ -1806,7 +1883,7 @@ def main() -> None:
             for c, f in fund["data"]["stocks"].items()}
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(data, ensure_ascii=False))
-            .replace("__BUILT_AT__", datetime.now().strftime("%Y-%m-%d %H:%M")))
+            .replace("__BUILT_AT__", tw_now().strftime("%Y-%m-%d %H:%M")))
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     out = DOCS_DIR / "index.html"
     out.write_text(html, encoding="utf-8")
