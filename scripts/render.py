@@ -420,7 +420,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 </div>
 
 <footer>
-資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日 17:30 後自動更新。<br>
+資料源：TWSE / TPEx 公開 API、yfinance、MOPS 公開資訊觀測站、TDCC 集保中心。每交易日收盤後自動更新（排程 17:30，GitHub Actions 實際多延遲至 19:00–20:30；各區塊以自身「資料日」為準）。<br>
 鐵則：只做現況呈現，不做預測；各區塊資料日不一致或過期時顯示 ⚠️。
 </footer>
 <div id="sp-overlay" onclick="spClose()"></div>

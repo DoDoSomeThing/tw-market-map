@@ -1,6 +1,6 @@
 # tw-market-map — 自用台股產業地圖
 
-仿 aistockmap.com 的自用台股儀表板。GitHub Actions 每交易日 17:30 後抓免費公開資料，產靜態 JSON + 單頁 HTML，掛 GitHub Pages。
+仿 aistockmap.com 的自用台股儀表板。GitHub Actions 每交易日收盤後抓免費公開資料，產靜態 JSON + 單頁 HTML，掛 GitHub Pages。（排程設 17:30，但 Actions 免費排程實測平均遲到 ~134 分 → 實際更新約 19:00–20:30。）
 
 **定位：只做現況呈現，不做預測。** 省看盤時間，不是找明牌。
 
@@ -37,7 +37,7 @@ scripts/
   run_all.py           管線入口（單模組失敗不擋全局）
 data/                  JSON 輸出（信封格式：ok/data_date/fetched_at/source/error/data）
 docs/index.html        GitHub Pages 入口
-.github/workflows/daily.yml  平日 09:30 UTC（台北 17:30）
+.github/workflows/daily.yml  平日 09:30 UTC（台北 17:30 排程；實際觸發約 19:00–20:30，Actions 排隊延遲）
 ```
 
 ## 資料新鮮度鐵則
