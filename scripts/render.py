@@ -260,12 +260,23 @@ tr:last-child td { border-bottom: none; }
 .sp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 9px 0; font-size: .84rem; }
 .sp-cell { background: rgba(4,6,11,.55); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; }
 .sp-cell .lbl { color: var(--muted); font-size: .7rem; display: block; }
-/* 雙欄個股面板：左=基本資料+法人、右=技術面+其他 */
-#sp-panel.sp-wide { width: min(880px, 95vw); }
-.sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+/* 雙欄個股面板：左=基本資料+法人+新聞、右=技術面。
+   桌機目標「一頁看完不捲動」→ 容器放寬 + 內容壓縮；≤820px（手機/窄窗）才退單欄並允許捲動。 */
+#sp-panel.sp-wide { width: min(1060px, 96vw); max-height: 94vh; overflow-y: hidden; }
+.sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .sp-two .sp-col { min-width: 0; }
-.sp-two .sp-grid { grid-template-columns: repeat(2, 1fr); }
-.sp-colhd { font-weight: 600; font-size: .82rem; color: var(--muted); padding: 6px 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.sp-two .sp-grid { grid-template-columns: repeat(3, 1fr); padding: 6px 0; gap: 5px; }
+.sp-two .sp-cell { padding: 4px 7px; }
+.sp-two .sp-cell .lbl { font-size: .66rem; }
+.sp-colhd { font-weight: 600; font-size: .8rem; color: var(--muted); padding: 4px 0 3px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+/* 面板內壓縮（一頁看完的關鍵；不影響面板外的同類元件） */
+.sp-two .ta-block { line-height: 1.45; }
+.sp-two .ma-grid { gap: 5px; margin: 5px 0; }
+.sp-two .ma-cell { padding: 4px; }
+.sp-two .bb-wrap { margin: 5px 0; }
+.sp-two .gauge { margin: 3px 0; }
+.sp-two .inst-chart { margin: 2px 0; }
+.sp-two .news-links .mops-item { padding: 4px 8px; line-height: 1.4; }
 /* 法人買賣超詳細圖表（左欄） */
 .inst-chart { margin: 4px 0 2px; }
 .inst-row { display: flex; align-items: center; gap: 6px; }
@@ -274,7 +285,11 @@ tr:last-child td { border-bottom: none; }
 .inst-sum { font-size: .72rem; font-family: var(--num); width: 64px; text-align: right; flex: none; }
 .inst-axis { display: flex; justify-content: space-between; font-size: .64rem; color: var(--muted); padding: 1px 64px 0 32px; }
 .inst-axis span { flex: 1; text-align: center; }
-@media (max-width: 680px) { #sp-panel.sp-wide { width: 94vw; } .sp-two { grid-template-columns: 1fr; gap: 4px; } .sp-two .sp-grid { grid-template-columns: repeat(3, 1fr); } }
+/* 手機/窄窗：退單欄，改回可捲動（塞不下是必然，捲動才合理） */
+@media (max-width: 820px) {
+  #sp-panel.sp-wide { width: 94vw; max-height: 88vh; overflow-y: auto; }
+  .sp-two { grid-template-columns: 1fr; gap: 4px; }
+}
 .sp-close { float: right; background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; font-family: inherit; transition: color var(--tr); }
 .sp-close:hover { color: var(--fg); }
 .spark { vertical-align: middle; }
@@ -414,6 +429,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 
 <script>
 const DATA = __DATA__;
+// PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
+// （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
+const PE_ABSURD = 200;
 const BUILT_AT = "__BUILT_AT__";
 
 // ── 新鮮度（瀏覽端算，跳過六日）──
@@ -506,9 +524,31 @@ function openStock(code) {
       `<span class="sr-badge" onclick="spClose();showTab('topics');showTopic('${id}',true)">${nm}</span>`).join(" ")
     + " " + (IN_CHAIN[code] || []).map(([id, nm]) =>
       `<span class="sr-badge" onclick="spClose();showTab('chains');showChain('${id}',true)">${nm}</span>`).join(" ");
-  const news = newsFor(code, 3).map(it => `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
+  const news = newsFor(code, 2).map(it => `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
     <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`).join("");
   const cell = (lbl, val) => `<div class="sp-cell"><span class="lbl">${lbl}</span>${val}</div>`;
+  // 估值（交易所每日公布 PE/PB；虧損股不給 PE → 顯示「—」不裝有值）
+  // PE 極高 ≠ 貴，而是 EPS 趨近 0 讓這把尺失效（M31 PE 10300 = 近四季每股只賺 0.04 元）→ 標示避免誤讀
+  const va = DATA.valuation.ok ? (DATA.valuation.data.stocks[code] || {}) : {};
+  const capTxt = va.cap == null ? "—"
+    : va.cap >= 10000 ? (va.cap / 10000).toFixed(2) + " 兆" : va.cap.toLocaleString() + " 億";
+  // 集保大戶（週資料）：[400張+%, 千張+%, 週增減pp, 股東人數]
+  const bh = DATA.tdcc.ok ? (DATA.tdcc.data.by_code || {})[code] : null;
+  const bhDelta = bh && bh[2] != null
+    ? ` <span class="${cls(bh[2])}">${bh[2] > 0 ? "+" : ""}${bh[2]}pp</span>` : "";
+  // 同題材相對位置：這檔在所屬題材裡的漲幅名次（我們獨有的角度）
+  let rankBadges = "";
+  if (DATA.topics_view.ok) {
+    const rs = [];
+    for (const t of DATA.topics_view.data.topics) {
+      const ms = (t.members || []).filter(m => m.pct != null);
+      if (ms.length < 3) continue;
+      const sorted = [...ms].sort((a, b) => b.pct - a.pct);
+      const i = sorted.findIndex(m => m.code === code);
+      if (i >= 0) rs.push(`<span class="sr-badge" title="${t.name} 今日漲幅排名">${t.name} ${i + 1}/${sorted.length}</span>`);
+    }
+    if (rs.length) rankBadges = `<div class="sub" style="padding:4px 0 0">今日題材內漲幅名次 ${rs.join(" ")}</div>`;
+  }
   const panelEl = document.getElementById("sp-panel");
   panelEl.classList.add("sp-wide");
   panelEl.innerHTML = `
@@ -524,8 +564,14 @@ function openStock(code) {
           ${cell("成交值", r[6] != null ? r[6] + " 億" : "—")}
           ${cell("外資(張)", lotsCell(r[7], r[9]))}
           ${cell("投信(張)", lotsCell(r[8], r[10]))}
+          ${cell("本益比 PE", va.pe == null ? `<span class="sub">—</span>`
+              : va.pe > PE_ABSURD ? `${va.pe}<span class="sub"> ⚠️低獲利</span>` : va.pe)}
+          ${cell("股價淨值比 PB", va.pb != null ? va.pb : "—")}
+          ${cell("市值", capTxt)}
           ${cell("EPS", f.eps ?? "—")}${cell("毛利率", f.gm != null ? f.gm + "%" : "—")}
-          ${cell("殖利率", f.yield_pct != null ? f.yield_pct + "%" : "—")}
+          ${cell("殖利率", va.yield_ex != null ? va.yield_ex + "%" : (f.yield_pct != null ? f.yield_pct + "%" : "—"))}
+          ${bh ? cell("大戶 400張+", `${bh[0]}%${bhDelta}`) + cell("千張大戶", bh[1] + "%")
+                 + cell("股東人數", bh[3] ? bh[3].toLocaleString() : "—") : ""}
           ${dv ? cell("最後買進日", dv.last_buy ? `<b>${dv.last_buy.slice(5).replace("-", "/")}</b>` : "—")
                + cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
                + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
@@ -533,13 +579,14 @@ function openStock(code) {
                + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
         </div>
         <div id="sp-inst"></div>
-        ${f.yq ? `<div class="sub" style="padding-top:4px">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}</div>` : ""}
+        ${rankBadges}
+        ${f.yq ? `<div class="sub" style="padding-top:4px">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}${bh ? "｜大戶為集保週資料（" + (DATA.tdcc.data_date || "").slice(5).replace("-", "/") + "）" : ""}${va.pe != null && va.pe > PE_ABSURD ? "｜⚠️ PE " + va.pe + " 倍係近四季每股僅賺 " + (r[3] / va.pe).toFixed(2) + " 元所致，PE 參考性差" : ""}</div>` : ""}
+        ${news ? `<div class="news-links" style="margin-top:4px">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
       </div>
       <div class="sp-col">
         <div id="sp-ta"></div>
         ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
-        ${news ? `<div class="news-links">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
-        <div style="padding-top:8px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
+        <div style="padding-top:6px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
           <span class="sub">（裝 kanpan 擴充會自動掛面板）</span></div>
       </div>
     </div>`;
@@ -1671,7 +1718,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes", "dividend")}
+             "news_radar", "topic_discover", "changes", "dividend", "valuation")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]

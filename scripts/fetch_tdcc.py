@@ -134,8 +134,18 @@ def main() -> None:
             key=lambda m: m["r1000"], reverse=True)
         top_r1000 = ranked[:20]
 
+    # 全量 by_code（個股面板用）：code -> [400張+持股比, 千張+持股比, 週增減pp, 股東人數]
+    # 原本只輸出排行榜 Top15，個股面板看不到自己的大戶結構 → 補全量（1991 檔 ≈ 60KB）。
+    prev_snap = prev[0] if prev else {}
+    by_code = {}
+    for code, rec in stocks.items():
+        p = prev_snap.get(code)
+        delta = round(rec["r400"] - p[0], 2) if p else None
+        by_code[code] = [rec["r400"], rec["r1000"], delta, rec["holders"] or None]
+
     write_json("tdcc", {
         "inc": inc, "dec": dec, "top_r1000": top_r1000,
+        "by_code": by_code,
         "prev_week": prev_iso, "n_stocks": len(stocks),
         "min_trade_value": MIN_TRADE_VALUE,
     }, data_date=iso, source="TDCC opendata 股權分散（週）", error=None)

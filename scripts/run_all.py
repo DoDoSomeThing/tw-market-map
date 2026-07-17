@@ -16,6 +16,7 @@ SCRIPTS = [
     "fetch_mops.py",
     "fetch_tdcc.py",
     "fetch_fundamentals.py",
+    "fetch_valuation.py",   # PE/PB/市值（交易所每日公布值）
     "fetch_dividend.py",
     "fetch_news.py",
     "fetch_revenue.py",
