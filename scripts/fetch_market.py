@@ -3,8 +3,19 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from tw_common import (data_age_days, http_get_json, parse_num, read_json, roc_to_iso,
-                       write_error, write_json, ymd_to_iso)
+import json
+
+from tw_common import (DATA_DIR, data_age_days, http_get_json, parse_num, read_json, roc_to_iso, tw_today, write_error, write_json, ymd_to_iso)
+
+# 永久 archive（append-only，2026-07-17 起）：每日大盤法人/資券精簡快照。
+# 目的：畫「近兩週三大法人買賣超 / 融資增減」趨勢柱狀圖——原本 market.json 每天覆蓋、
+# 無歷史可畫。~200 bytes/天，可忽略。
+ARCHIVE_DIR = DATA_DIR / "history_market"
+
+
+def _yi(v):
+    """元 → 億（BFI82U 給的是元）；None 照回 None。"""
+    return round(v / 1e8, 1) if v is not None else None
 
 BFI82U_URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json"
 MARGN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?selectType=MS&response=json"
@@ -37,7 +48,7 @@ def fetch_twse_inst() -> dict | None:
 def fetch_tpex_inst() -> dict | None:
     """上櫃三大法人買賣金額彙總。往回試 5 個日曆日（假日無資料）。失敗回 None。"""
     for back in range(6):
-        d = date.today() - timedelta(days=back)
+        d = tw_today() - timedelta(days=back)
         if d.weekday() >= 5:
             continue
         url = TPEX_INST_URL.format(d=d.strftime("%Y/%m/%d"))
@@ -133,6 +144,38 @@ def main() -> None:
         f"資券:{margin_err}" if margin_err else None,
     ) if x]
     date_ = (twse or {}).get("date") or (margin or {}).get("date")
+
+    # ── 永久 archive（append-only，2026-07-17 起）──
+    # market.json 原本每天被覆蓋、沒有歷史 → 畫不出「近兩週法人買賣超/融資增減趨勢」。
+    # 存精簡快照（僅趨勢圖需要的欄位，~200 bytes/天）→ build_market_trend 讀它畫圖。
+    # 資券沿用前次時不存（避免同一天資料重複計入趨勢）。
+    if date_:
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        rows = (twse or {}).get("rows", {})
+        snap = {
+            "date": date_,
+            # 億元；外資/投信/自營(自行+避險)/合計 買賣超
+            "foreign": _yi(rows.get("foreign", {}).get("net")),
+            "trust": _yi(rows.get("trust", {}).get("net")),
+            "dealer": _yi((rows.get("dealer_self", {}).get("net") or 0)
+                          + (rows.get("dealer_hedge", {}).get("net") or 0))
+                      if rows.get("dealer_self") else None,
+            "total": _yi(rows.get("total", {}).get("net")),
+        }
+        m = margin or {}
+        if m.get("date") == date_:   # 只存當日真實抓到的資券（沿用的舊值不進趨勢）
+            mv = m.get("rows", {}).get("margin_value", {})
+            su = m.get("rows", {}).get("short_units", {})
+            snap["margin_chg"] = (round((mv["today_bal"] - mv["prev_bal"]) / 1e5, 1)
+                                  if mv.get("today_bal") is not None and mv.get("prev_bal") is not None else None)
+            snap["margin_bal"] = round(mv["today_bal"] / 1e5, 1) if mv.get("today_bal") is not None else None
+            snap["short_chg"] = (su["today_bal"] - su["prev_bal"]
+                                 if su.get("today_bal") is not None and su.get("prev_bal") is not None else None)
+            snap["short_bal"] = su.get("today_bal")
+        (ARCHIVE_DIR / f"{date_}.json").write_text(
+            json.dumps(snap, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[OK ] archive: history_market/{date_}.json")
+
     write_json("market", {
         "inst_twse": twse,
         "inst_tpex": tpex,
