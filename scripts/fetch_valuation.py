@@ -7,7 +7,15 @@
 # 注意：交易所 PE 用「近四季 EPS」；虧損股 PE 給 0 或空 → 一律轉 None，前端顯示「—」（不裝有值）。
 from __future__ import annotations
 
-from tw_common import http_get_json, parse_num, read_json, roc_to_iso, write_error, write_json
+import json
+
+from tw_common import DATA_DIR, http_get_json, parse_num, read_json, roc_to_iso, write_error, write_json
+
+# 永久 archive（append-only 正本，2026-07-17 起）：每日 PE/PB/殖利率/市值 快照。
+# 目的：累積出「本益比河流圖」所需的歷史序列——單點 PE 33 看不出貴不貴，
+# 要跟自己過去 N 年的 PE 區間比才有意義。今天不存，之後就永遠畫不出來。
+# 體積：~1900 檔 × 4 值 ≈ 60KB/天 → ~15MB/年（同 history_ohlc 套路，進 git）。
+ARCHIVE_DIR = DATA_DIR / "history_valuation"
 
 TWSE_BWIBBU = "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL"
 TPEX_PER = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"
@@ -96,12 +104,25 @@ def main() -> None:
             v["cap"] = round(sh * s["close"] / 1e8, 1)   # 元 → 億
             n_cap += 1
 
+    # ── 永久 archive：每日快照（供日後畫本益比河流圖／估值歷史）──
+    data_date = max(dates) if dates else None
+    n_arch = 0
+    if data_date:
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        # 精簡格式 [pe, pb, yield, cap]，省空間；缺值 None。同日重跑覆蓋。
+        snap = {c: [v.get("pe"), v.get("pb"), v.get("yield_ex"), v.get("cap")]
+                for c, v in stocks.items()}
+        (ARCHIVE_DIR / f"{data_date}.json").write_text(
+            json.dumps(snap, separators=(",", ":")), encoding="utf-8")
+        n_arch = len(snap)
+        print(f"[OK ] archive: history_valuation/{data_date}.json（{n_arch} 檔）")
+
     write_json("valuation", {
         "stocks": stocks, "n_pe": sum(1 for v in stocks.values() if v.get("pe")),
-        "n_cap": n_cap,
+        "n_cap": n_cap, "n_archived": n_arch,
         "note": "PE/PB 為交易所每日公布值（PE 採近四季 EPS）；虧損股不給 PE。"
                 "市值=已發行普通股數×收盤（股數月更，除權後數日內可能落差）",
-    }, data_date=max(dates) if dates else None,
+    }, data_date=data_date,
         source="TWSE BWIBBU_ALL + TPEx peratio_analysis + t187ap03 股數",
         error="；".join(errs) or None)
 

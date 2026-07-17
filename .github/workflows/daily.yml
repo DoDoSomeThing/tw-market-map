@@ -72,6 +72,10 @@ jobs:
           TODAY_SNAP=$(ls -t data/history_ohlc/*.json 2>/dev/null | head -1)
           echo "最新 archive 快照：${TODAY_SNAP:-無}"
           if [ -z "$TODAY_SNAP" ]; then GAP="archive 無任何快照"; fi
+          # 估值 archive（PE 河流圖的歷史來源，2026-07-17 起累積）同樣要守
+          VAL_SNAP=$(ls -t data/history_valuation/*.json 2>/dev/null | head -1)
+          echo "最新估值快照：${VAL_SNAP:-無}"
+          if [ -z "$VAL_SNAP" ]; then GAP="${GAP:+$GAP；}history_valuation 無任何快照"; fi
           {
             echo "partial=$PARTIAL"
             echo "gap=$GAP"
