@@ -80,6 +80,32 @@ header.top { position: sticky; top: 0; z-index: 50; background: rgba(4,6,11,.82)
 main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .tabpane { display: none; }
 .tabpane.active { display: block; animation: paneIn .22s ease; }
+/* ── 焦點頁 Bento 拼盤 ──
+   原本 8 張卡由上到下各吃滿整寬 → 自選股只有 78px 高卻霸佔 1176px，整頁 4756px 要滾 5 個螢幕。
+   改 12 欄 grid：矮卡(自選/寬度/指數)收進右側單欄疊放，其餘兩兩並排。
+   .active 才設 grid，否則會蓋掉分頁切換的 display:none。 */
+/* align-items:start = 每張卡自然高、誰也不被撐。
+   用 stretch 的話今日異動卡會永遠被撐滿整列高 → syncChangesHeight() 量 sec.bottom 量到的是
+   「列的底」而不是「卡的自然底」，delta 恆為固定值、每次呼叫再縮一次，永遠不收斂。 */
+#pane-focus.active { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--gap); align-items: start; }
+#pane-focus > section, #pane-focus > .bento-col { margin-bottom: 0; min-width: 0; }  /* min-width:0 = 允許內部寬表格自己捲，不撐爆格線 */
+/* 右欄卡片保持自然高（align-content:start）。
+   曾試過 stretch 撐滿左卡高度 → 卡是齊了，但卡內多出 70px 空白底，比空洞更醜。
+   改由 syncChangesHeight() 反過來讓左卡（今日異動）去配合右欄高度。 */
+#pane-focus > .bento-col { display: grid; gap: var(--gap); align-content: start; }
+#pane-focus > #sec-changes { grid-column: span 8; }
+#pane-focus > #bento-side  { grid-column: span 4; }
+/* 國際指數不放右欄：381px 窄欄會把它從 299 撐到 554（卡片式排版塞不下就換行）→ 整條右欄暴增到 1017。 */
+#pane-focus > #sec-indices { grid-column: span 12; }
+/* 寬表格留整列：實測併成半寬(580px)後內容換行，高度反而多兩倍
+   (營收亮點 541→1266、資金流 1014→1959、個股動向 1269→2589)。 */
+#pane-focus > #sec-revhl, #pane-focus > #sec-market,
+#pane-focus > #sec-flow,  #pane-focus > #sec-inst { grid-column: span 12; }
+@media (max-width: 980px) {   /* 窄螢幕塌回單欄 */
+  #pane-focus.active { display: block; }
+  #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
+  #pane-focus > .bento-col > section:last-child { margin-bottom: 0; }
+}
 @keyframes paneIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* 搜尋 */
@@ -182,8 +208,12 @@ select { background: var(--panel); border: 1px solid var(--border); color: var(-
 section { margin-bottom: 14px; }
 .err { color: var(--warn); background: var(--panel); border: 1px solid rgba(255,171,36,.45); border-radius: var(--r); padding: 10px; font-size: .85rem; }
 
-/* 指數卡 */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--gap); }
+/* 指數卡一律排成一列（.cards 只有國際指數在用）。
+   原本 grid auto-fill minmax(160px) 依寬度自動填欄 → 7 檔在 1176px 排成「上 6 下 1」，落單那張很醜。
+   改 flex：flex:1 讓 N 張平均分寬，不管幾張都同一列；basis 140px 是下限，塞不下就整條橫捲。
+   手機也不換行：7 是質數，一換行就變 2/2/2/1，最後一張照樣落單 → 寧可橫向滑動。 */
+.cards { display: flex; gap: var(--gap); overflow-x: auto; }
+.cards > .card { flex: 1 0 140px; min-width: 0; }
 .card { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 13px 14px;
   transition: border-color var(--tr), transform var(--tr); }
 .card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
@@ -253,7 +283,10 @@ tr:last-child td { border-bottom: none; }
 .news-links .mops-item a:hover { color: var(--accent); }
 
 /* 今日異動 */
-.chg-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); font-size: .86rem; overflow: hidden; }
+/* 全市場異動全部攤開（138 條）→ 靠卡內捲動控高度，不再收在 <details> 裡。
+   桌機的 max-height 由 syncChangesHeight() 動態蓋成「右欄實際高度」；
+   這裡的 480px 是手機單欄／JS 沒跑起來時的保底值。 */
+.chg-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); font-size: .86rem; max-height: 480px; overflow-y: auto; }
 .chg-item { padding: 8px 11px; border-bottom: 1px solid rgba(28,42,68,.55); line-height: 1.5; cursor: pointer; transition: background var(--tr); }
 .chg-item:hover { background: var(--accent-soft); }
 .chg-item:last-child { border-bottom: none; }
@@ -297,14 +330,6 @@ tr:last-child td { border-bottom: none; }
 .sp-two .gauge { margin: 3px 0; }
 .sp-two .inst-chart { margin: 2px 0; }
 .sp-two .news-links .mops-item { padding: 4px 8px; line-height: 1.4; }
-/* 大盤法人/資券 近兩週趨勢柱狀圖 */
-.trend { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin-top: 8px; }
-.trend-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .85rem; margin-bottom: 6px; }
-.trend-hd b { font-size: .92rem; }
-.trend-today { margin-left: auto; font-family: var(--num); font-weight: 700; }
-.trend-svg { width: 100%; height: 96px; display: block; }
-.trend-svg .bar:hover { opacity: .75; }
-.trend-axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--muted); padding-top: 2px; }
 
 /* 法人買賣超詳細圖表（左欄） */
 .inst-chart { margin: 4px 0 2px; }
@@ -336,6 +361,15 @@ tr:last-child td { border-bottom: none; }
 .co .co-px { margin-left: auto; font-size: .85rem; white-space: nowrap; }
 .co .tag { margin-right: 0; }
 .topic-desc { color: var(--muted); font-size: .82rem; padding: 6px 2px; }
+/* 長表摺疊：資料照渲染、只是收起 → 展開零延遲。用 hidden 而非 display:none? 不行，
+   <tr> 的 hidden 在部分瀏覽器仍佔位 → 一律 display:none，代價是收起的列 Ctrl+F 找不到。 */
+.foldx { display: none; }
+.foldbox.open .foldx { display: table-row; }
+.foldbox.open .rev-card.foldx { display: block; }
+.foldbtn { display: block; width: 100%; margin-top: 8px; padding: 6px; background: transparent;
+  border: 1px dashed var(--border-hi); border-radius: var(--r-sm); color: var(--muted);
+  font-size: .74rem; cursor: pointer; transition: color var(--tr), border-color var(--tr); }
+.foldbtn:hover { color: var(--accent); border-color: var(--accent); }
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 @media (max-width: 700px) { .ranks { grid-template-columns: 1fr; } }
 footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1.6; border-top: 1px solid rgba(28,42,68,.5); margin-top: 16px; }
@@ -400,11 +434,13 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-changes"><h2>今日異動 <span class="stamp" data-stamp="changes"></span></h2>
 <div class="sub">今天 vs 昨天的變化，規則寫死可驗證：法人連買賣 ≥3 日翻向｜新聞點名 ≥2 則｜澄清/重大公告｜營收新公布｜題材聲量 ≥昨日 2 倍｜現況描述，非訊號</div>
 <div id="changes"></div></section>
-<section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div></section>
+<div class="bento-col" id="bento-side">
+  <section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div></section>
+  <section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
+</div>
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
-<section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
 <section id="sec-revhl"><h2>營收亮點 <span class="stamp" data-stamp="revenue_hl"></span></h2><div class="sub" id="revhl-sub"></div><div id="revhl"></div></section>
-<section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div><div id="market-trend"></div></section>
+<section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
 </div>
@@ -463,6 +499,28 @@ const DATA = __DATA__;
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
 const BUILT_AT = "__BUILT_AT__";
+
+// ── 長表摺疊 ──
+// 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
+// 資料全部照渲染進 DOM、只是先收起來 → 展開零延遲、Ctrl+F 找得到（用 hidden 而非 display:none 會找不到）。
+let _foldSeq = 0;
+function foldWrap(html, total, shown, unit) {
+  if (total <= shown) return html;
+  const id = "fold" + (++_foldSeq);
+  const label = `展開其餘 ${total - shown} ${unit} ▾`;
+  return `<div class="foldbox" id="${id}">${html}
+    <button class="foldbtn" data-fold="${id}" data-label="${label}">${label}</button></div>`;
+}
+// 前 shown 個原樣、其餘掛 .foldx（收起）。mark 由呼叫端給，因為 <tr> 跟 <div> 掛 class 的位置不同。
+function foldSlice(arr, shown, mark) {
+  return arr.map((h, i) => i < shown ? h : mark(h)).join("");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".foldbtn");
+  if (!b) return;
+  const open = document.getElementById(b.dataset.fold).classList.toggle("open");
+  b.textContent = open ? "收合 ▴" : b.dataset.label;
+});
 
 // ── 新鮮度（瀏覽端算，跳過六日）──
 function tradingDayAge(iso) {
@@ -785,16 +843,55 @@ function renderChanges() {
   const wlHtml = wl.size
     ? (wlEv.length ? wlEv.map(e => line(e, true)).join("") : `<div class="chg-item sub" style="cursor:default">自選股今日無異動</div>`)
     : `<div class="chg-item sub" style="cursor:default">尚未加自選股（右上搜尋點 ★），以下為全市場異動</div>`;
-  const topOthers = others.slice(0, 8).map(e => line(e, false)).join("");
-  const rest = others.length > 8
-    ? `<details><summary class="sub" style="cursor:pointer;padding:7px 10px">更多全市場異動（${others.length - 8} 條）</summary>${others.slice(8, 80).map(e => line(e, false)).join("")}</details>` : "";
+  // 全市場異動全部攤平（原本收在 <details> 裡）：卡片本身限高可捲，不再靠摺疊壓高度。
+  // 順帶修掉舊 bug：summary 寫「更多異動（N 條）」但內容是 slice(8, 80)，
+  // N 超過 80 時多出來的幾十條根本沒渲染 → 數字對不上內容。現在不切。
+  const rest = others.map(e => line(e, false)).join("");
   if (!mk && !tp && !wlEv.length && !others.length) {
     el.innerHTML = `<div class="chg-list"><div class="chg-item sub" style="cursor:default">今日無特別異動</div></div>`;
     return;
   }
-  el.innerHTML = `<div class="chg-list">${mk}${tp}${wlHtml}${topOthers}${rest}</div>`;
+  el.innerHTML = `<div class="chg-list">${mk}${tp}${wlHtml}${rest}</div>`;
+  syncChangesHeight();
+}
+
+// ── 今日異動高度跟著右欄走 ──
+// 焦點頁第一列是「今日異動｜自選股+市場寬度」。兩邊不等高只有三種結局：露出透明空洞、
+// 把右欄卡撐出白底、或把左卡寫死一個高度（右欄一長高就又不齊）。
+// 純 CSS 辦不到——grid 列高取「最高」那個，而今日異動 138 條攤開有 5336px，
+// 會反過來把整列撐爆。只能用 JS 量右欄真實高度，回頭限制左卡的捲動區。
+// 右欄高度會變（自選股存在 localStorage，加減股票即時重畫）→ 用 ResizeObserver 持續跟。
+function syncChangesHeight() {
+  const pane = document.getElementById("pane-focus");
+  const side = document.getElementById("bento-side");
+  const sec = document.getElementById("sec-changes");
+  const list = sec && sec.querySelector(".chg-list");
+  if (!pane || !side || !list) return;
+  const disp = getComputedStyle(pane).display;
+  if (disp === "none") return;                                     // 切到別的分頁 → 量到的全是 0，別亂設
+  if (disp !== "grid") { list.style.maxHeight = ""; return; }      // 手機單欄 → 交還給 CSS
+  // 目標＝右欄最後一張卡的底緣。量卡片不量 wrapper：wrapper 是 grid 項目，
+  // 一旦哪天又被設成 stretch 就會回報整列高 → 量到自己、變成循環參照。
+  const kids = [...side.children];
+  if (!kids.length) return;
+  const target = kids[kids.length - 1].getBoundingClientRect().bottom;
+  if (target <= 0) return;
+  // 用差值調整而不是反推「標題+內距」的高度：一減一加兩邊量到的時機會不同步，
+  // 之前那版每次切回分頁就飄 14px。差值式對齊後 delta=0 → 再跑幾次都不動。
+  const delta = target - sec.getBoundingClientRect().bottom;
+  if (Math.abs(delta) < 1) return;
+  const h = list.getBoundingClientRect().height + delta;
+  list.style.maxHeight = Math.max(240, Math.round(h)) + "px";   // 240 = 右欄極矮時的下限
 }
 renderChanges();
+(function () {
+  const side = document.getElementById("bento-side");
+  if (!side || !window.ResizeObserver) return;
+  // 觀察卡片本身（自然高、不受左卡影響）→ 不會跟 maxHeight 互相觸發成無限迴圈
+  const ro = new ResizeObserver(() => syncChangesHeight());
+  [...side.children].forEach(c => ro.observe(c));
+  addEventListener("resize", syncChangesHeight);
+})();
 
 // ── 法人近日買賣柱狀（inst10.json lazy fetch）──
 let INST10 = null;
@@ -1084,50 +1181,11 @@ document.addEventListener("click", e => {
     <div style="margin-top:8px">${marginHtml}</div>`;
 })();
 
-// ── 大盤法人/資券 近兩週趨勢柱狀圖（官方 BFI82U / MI_MARGN；現況呈現非訊號）──
-function trendSVG(series, key, unit) {
-  const vals = series.map(s => s[key]).filter(v => v != null);
-  if (vals.length < 2) return null;
-  const W = 640, H = 96, mid = H / 2, n = series.length, bw = W / n;
-  const mx = Math.max(...vals.map(Math.abs), 1);
-  const bars = series.map((s, i) => {
-    const v = s[key];
-    if (v == null) return "";
-    const bh = Math.max(1.5, Math.abs(v) / mx * (mid - 12));
-    const y = v >= 0 ? mid - bh : mid;
-    const lbl = Math.abs(v) >= mx * 0.55 ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${(v >= 0 ? y - 3 : y + bh + 9).toFixed(1)}"
-        text-anchor="middle" font-size="9" fill="${v >= 0 ? "var(--up)" : "var(--down)"}">${v > 0 ? "+" : ""}${Math.round(v)}</text>` : "";
-    return `<g class="bar"><rect x="${(i * bw + 2.5).toFixed(1)}" y="${y.toFixed(1)}"
-      width="${Math.max(2, bw - 5).toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5"
-      fill="${v >= 0 ? "var(--up)" : "var(--down)"}"><title>${s.date.slice(5).replace("-", "/")}　${v > 0 ? "+" : ""}${v}${unit}</title></rect>${lbl}</g>`;
-  }).join("");
-  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="var(--border-hi)"/>${bars}</svg>`;
-}
-function trendBlock(env, key, title, hint, unit) {
-  if (!env.ok) return "";
-  const s = env.data.series || [];
-  const svg = trendSVG(s, key, unit);
-  if (!svg) return "";
-  const last = [...s].reverse().find(x => x[key] != null);
-  const v = last ? last[key] : null;
-  const dates = s.filter(x => x[key] != null).map(x => x.date);
-  const tick = i => (dates[i] || "").slice(5).replace("-", "/");
-  return `<div class="trend">
-    <div class="trend-hd"><b>${title}</b><span class="sub">近 ${dates.length} 個交易日・${hint}</span>
-      <span class="trend-today ${cls(v || 0)}">今日 ${v > 0 ? "+" : ""}${v}${unit}</span></div>
-    ${svg}
-    <div class="trend-axis"><span>${tick(0)}</span><span>${tick(Math.floor(dates.length / 2))}</span><span>${tick(dates.length - 1)}</span></div>
-  </div>`;
-}
-(function () {
-  const env = DATA.market_trend, el = document.getElementById("market-trend");
-  if (!el) return;
-  if (!env || !env.ok) { el.innerHTML = `<div class="sub">趨勢資料累積中</div>`; return; }
-  el.innerHTML =
-    trendBlock(env, "total", "每日三大法人買賣超", "買超↑賣超↓（上市合計）", "億") +
-    trendBlock(env, "margin_chg", "每日融資增減", "增資↑減資↓", "億");
-})();
+// 大盤法人/資券的近兩週趨勢柱狀圖（trendSVG / trendBlock / #market-trend）2026-07-17 整組移除：
+// 兩張圖（三大法人買賣超、融資增減）看下來都不如上方的數字表好讀。函式沒別人叫 → 一起清掉，
+// 免得留成沒人用的死碼。要復原去 git（commit 前一版）。
+// 資料端刻意不動：history_market 每日照存、build_market_trend 照產 market_trend.json，
+// 法人數列留著給之後的用途。
 
 // ── 熱力圖（squarified treemap，手刻無依賴）──
 function squarify(items, x, y, w, h, out) {
@@ -1256,7 +1314,7 @@ function streakBadge(s) {
   const d = env.data;
   function tbl(title, rows, who) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-    const body = rows.map((r, i) => {
+    const trs = rows.map((r, i) => {
       const lots = who === "f" ? r.f_lots : r.t_lots;
       const val = who === "f" ? r.f_value : r.t_value;
       const stk = who === "f" ? r.f_streak : r.t_streak;
@@ -1264,8 +1322,12 @@ function streakBadge(s) {
         <td class="${cls(lots)}">${lots > 0 ? "+" : ""}${lots.toLocaleString()}</td>
         <td class="${cls(val)}">${(Math.abs(val)/1e8).toFixed(1)}億</td>
         <td>${r.close}</td></tr>`;
-    }).join("");
-    return `<div><table><tr><th>${title}</th><th>張數</th><th>估金額</th><th>收盤</th></tr>${body}</table></div>`;
+    });
+    const N = 6;   // Top 15 全渲染，先露 6 名（四張表 ×15 列 = 這區 1269px 的來源）
+    const body = foldSlice(trs, N, h => h.replace("<tr>", '<tr class="foldx">'));
+    return `<div>${foldWrap(
+      `<table><tr><th>${title}</th><th>張數</th><th>估金額</th><th>收盤</th></tr>${body}</table>`,
+      trs.length, N, "名")}</div>`;
   }
   el.innerHTML = `<div class="ranks">
     ${tbl("外資買超 Top 15", d.foreign_buy, "f")}${tbl("外資賣超 Top 15", d.foreign_sell, "f")}
@@ -1286,12 +1348,16 @@ function streakBadge(s) {
   }
   function tbl(title, rows) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-    const body = rows.map(r => `<tr>
+    const trs = rows.map(r => `<tr>
       <td>${r.name} <span class="sub">${r.n}檔</span></td>
       <td class="${cls(r.f_val)}">${sign(r.f_val)}億${stk(r.f_streak)}</td>
       <td class="${cls(r.t_val)}">${sign(r.t_val)}億${stk(r.t_streak)}</td>
-      <td class="sub">${r.top.map(t => `${t.name}${sign(t.val)}`).join("、")}</td></tr>`).join("");
-    return `<div><table><tr><th>${title}</th><th>外資</th><th>投信</th><th>主要個股(億)</th></tr>${body}</table></div>`;
+      <td class="sub">${r.top.map(t => `${t.name}${sign(t.val)}`).join("、")}</td></tr>`);
+    const N = 5;
+    const body = foldSlice(trs, N, h => h.replace("<tr>", '<tr class="foldx">'));
+    return `<div>${foldWrap(
+      `<table><tr><th>${title}</th><th>外資</th><th>投信</th><th>主要個股(億)</th></tr>${body}</table>`,
+      trs.length, N, "族群")}</div>`;
   }
   const K = 8;
   function split(arr) {
@@ -1679,12 +1745,16 @@ function fundLine(code) {
     `${d.ym_label} 營收（月營收於次月 10 日前公布，openapi 為月批次）｜${d.criteria}`;
   const items = d.items || [];
   if (!items.length) { el.innerHTML = `<div class="sub">本月無符合條件個股</div>`; return; }
-  el.innerHTML = `<div class="rev-cards">` + items.map(r => `
+  const cards = items.map(r => `
     <div class="rev-card" data-code="${r.code}" title="${fundLine(r.code) || "點擊開 Yahoo 股市"}">
       <b>${r.name}</b> <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span><br>
       營收 <b>${r.rev_yi}</b> 億　<span class="up">YoY +${r.yoy}%</span>${r.mom != null ? `　<span class="sub">MoM ${r.mom > 0 ? "+" : ""}${r.mom}%</span>` : ""}<br>
       <span class="${cls(r.pct)}">${r.close}（${sign(r.pct)}%）</span>
-    </div>`).join("") + `</div>`;
+    </div>`);
+  const N = 8;
+  el.innerHTML = foldWrap(
+    `<div class="rev-cards">${foldSlice(cards, N, h => h.replace('class="rev-card"', 'class="rev-card foldx"'))}</div>`,
+    cards.length, N, "檔");
   el.querySelectorAll(".rev-card").forEach(c => c.addEventListener("click", () => openStock(c.dataset.code)));
 })();
 
@@ -1744,6 +1814,8 @@ function fundLine(code) {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.pane === id));
     if (push) history.replaceState(null, "", location.pathname + location.search + "#tab=" + id);
     window.scrollTo(0, 0);
+    // 焦點頁藏著時量不到尺寸（全 0）→ 一顯示回來就重算左卡高度
+    if (id === "focus") syncChangesHeight();
   }
   window.showTab = id => show(id, true);   // 搜尋徽章跳轉用
   document.querySelectorAll(".tab").forEach(t =>
@@ -1792,10 +1864,12 @@ document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_
 
 
 def main() -> None:
+    # 註：market_trend 刻意不進這包。趨勢柱狀圖 2026-07-17 拿掉後頁面沒人讀它，
+    # 嵌進去只是白帶一份沒用的 payload；build_market_trend 仍照產 data/market_trend.json。
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes", "dividend", "valuation", "market_trend")}
+             "news_radar", "topic_discover", "changes", "dividend", "valuation")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
