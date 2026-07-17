@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 import requests
 
-from tw_common import DATA_DIR, ROOT, UA, build_topic_matcher, read_json, write_error, write_json
+from tw_common import (DATA_DIR, ROOT, TW_TZ, UA, build_topic_matcher, read_json, tw_now, write_error, write_json)
 from email.utils import parsedate_to_datetime
 
 FEEDS = [
@@ -51,7 +51,7 @@ def parse_feed(source: str, scope: str, xml_text: str) -> list[dict]:
             continue
         try:
             dt = parsedate_to_datetime(pub)
-            iso = dt.astimezone().strftime("%Y-%m-%d %H:%M")
+            iso = dt.astimezone(TW_TZ).strftime("%Y-%m-%d %H:%M")
         except Exception:
             iso = ""
         out.append({"title": title, "link": link, "time": iso, "source": source, "scope": scope})
@@ -155,7 +155,7 @@ def main() -> None:
     intl = [it for it in uniq if it["scope"] == "intl"][:MAX_INTL]
     items = sorted(tw + intl, key=lambda x: x["time"], reverse=True)
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = tw_now().strftime("%Y-%m-%d")
     write_json("news", {"items": items},
                data_date=items[0]["time"][:10] if items and items[0]["time"] else today,
                source="鉅亨網(台股+國際) + Yahoo股市 RSS（標題聚合，內文請點回原站）",

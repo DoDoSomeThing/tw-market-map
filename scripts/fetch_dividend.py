@@ -8,7 +8,7 @@ import re
 import subprocess
 from datetime import datetime, timedelta
 
-from tw_common import UA, read_json, write_error, write_json
+from tw_common import UA, read_json, tw_now, write_error, write_json
 
 TWT48U = "https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json"
 TAG = re.compile(r"<[^>]+>")
@@ -58,7 +58,7 @@ def main() -> None:
 
     daily = read_json("daily_all")
     info = {s["code"]: s for s in daily["data"].get("stocks", [])} if daily.get("ok") else {}
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = tw_now().strftime("%Y-%m-%d")
 
     items: list[dict] = []
     by_code: dict[str, dict] = {}

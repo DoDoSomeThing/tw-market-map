@@ -20,6 +20,7 @@ SCRIPTS = [
     "fetch_dividend.py",
     "fetch_news.py",
     "fetch_revenue.py",
+    "build_market_trend.py",  # 大盤法人/資券近兩週趨勢（讀 history_market archive）
     "build_breadth.py",
     "build_heatmap.py",
     "build_rank.py",

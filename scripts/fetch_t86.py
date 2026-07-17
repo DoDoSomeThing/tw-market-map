@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from tw_common import DATA_DIR, http_get_json, parse_num, roc_to_iso, write_error, write_json
+from tw_common import (DATA_DIR, http_get_json, parse_num, roc_to_iso, tw_today, write_error, write_json)
 
 T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d8}&selectType=ALL&response=json"
 TPEX_URL = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
@@ -16,7 +16,7 @@ HISTORY_DIR = DATA_DIR / "history_t86"
 def fetch_twse() -> tuple[dict, str] | None:
     """往回試 5 個交易日。回 ({code: {f, t, d, total}}, iso_date)，單位=股。"""
     for back in range(8):
-        d = date.today() - timedelta(days=back)
+        d = tw_today() - timedelta(days=back)
         if d.weekday() >= 5:
             continue
         j = http_get_json(T86_URL.format(d8=d.strftime("%Y%m%d")))

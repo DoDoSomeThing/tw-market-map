@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from tw_common import http_get_json, parse_num, roc_to_iso, sanity_check_pct, write_error, write_json
+from tw_common import (http_get_json, parse_num, roc_to_iso, sanity_check_pct, tw_today, write_error, write_json)
 
 TWSE_MI_URL = ("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
                "?response=json&date={d8}&type=ALLBUT0999")
@@ -49,7 +49,7 @@ def fetch_industry_map() -> dict[str, str]:
 def fetch_twse_mi() -> tuple[list[dict], str | None]:
     """rwd MI_INDEX 每日收盤行情。往回試 5 個交易日；全失敗回 ([], None)。"""
     for back in range(8):
-        d = date.today() - timedelta(days=back)
+        d = tw_today() - timedelta(days=back)
         if d.weekday() >= 5:
             continue
         try:

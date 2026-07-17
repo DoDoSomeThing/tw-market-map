@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 from datetime import date, timedelta
 
-from tw_common import http_get_json, parse_num, read_json, roc_to_iso, write_json, ymd_to_iso
+from tw_common import (http_get_json, parse_num, read_json, roc_to_iso, tw_today, write_json, ymd_to_iso)
 
 TWSE_EXRIGHT_URL = ("https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
                     "?startDate={s}&endDate={e}&response=json")
@@ -29,7 +29,7 @@ BACKFILL_MONTHS = 14        # 視窗 260 交易日 ≈ 13 個月，多墊一個�
 def _month_ranges(n: int) -> list[tuple[str, str]]:
     """回最近 n 個月的 (startYYYYMMDD, endYYYYMMDD)，舊→新。"""
     out = []
-    today = date.today()
+    today = tw_today()
     y, m = today.year, today.month
     for i in range(n - 1, -1, -1):
         yy, mm = y, m - i
@@ -149,7 +149,7 @@ def main() -> None:
         "n_twse": n_tw, "n_tpex": n_tp,
         "note": "factor=除權息參考價/前收盤；上市 TWT49U 有完整歷史，"
                 "上櫃 openapi 僅今明快照→靠每日累積，歷史缺口無源可補",
-    }, data_date=date.today().isoformat(),
+    }, data_date=tw_today().isoformat(),
         source="TWSE TWT49U（上市，可回補）+ TPEx openapi tpex_exright_daily（上櫃，僅快照）",
         error="；".join(errs) or None)
     print(f"[OK ] data/exrights.json 事件 {n_before}→{len(events)}"

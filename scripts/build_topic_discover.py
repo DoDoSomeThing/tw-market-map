@@ -9,7 +9,7 @@ import json
 import re
 from datetime import datetime
 
-from tw_common import DATA_DIR, ROOT, read_json, write_json
+from tw_common import DATA_DIR, ROOT, read_json, tw_now, write_json
 
 TOPICS_PATH = ROOT / "topics" / "topics.json"
 STOP_PATH = ROOT / "topics" / "discover_stopwords.txt"
@@ -82,7 +82,7 @@ def main() -> None:
     dates = [p.stem for p in files]
     recent_dates = dates[:RECENT_DAYS]
     base_dates = dates[RECENT_DAYS:RECENT_DAYS + BASELINE_DAYS]
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = tw_now().strftime("%Y-%m-%d")
 
     if len(base_dates) < MIN_BASELINE_DAYS:
         write_json("topic_discover",

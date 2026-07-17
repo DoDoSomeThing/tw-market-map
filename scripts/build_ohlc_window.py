@@ -27,7 +27,7 @@ from pathlib import Path
 import requests
 
 import tw_common
-from tw_common import DATA_DIR, UA, parse_num, read_json
+from tw_common import DATA_DIR, UA, parse_num, read_json, tw_now, tw_today
 
 # ── 職責分離 ──
 # archive（data/history_ohlc/YYYY-MM-DD.json）＝永久累積的正本：每日一支全市場 OHLCV，
@@ -252,7 +252,7 @@ def seed_bydate() -> int:
     tw_common.FETCH_INTERVAL = SEED_INTERVAL  # 覆寫成較短間隔，加速歷史回補
     series: dict[str, list] = {}
     got_days = 0
-    cur = date.today()
+    cur = tw_today()
     limit = cur - timedelta(days=SEED_LOOKBACK_LIMIT)
     print(f"[種子·按日] 目標 {SEED_DAYS} 交易日，往回抓 TWSE+TPEx…", flush=True)
 
@@ -279,7 +279,7 @@ def seed_bydate() -> int:
 
     # 各檔目前是新→舊（往回抓），反轉成舊→新、裁上限
     stocks = {code: _trim(list(reversed(bars))) for code, bars in series.items()}
-    win = {"ok": True, "data_date": date.today().isoformat(), "n_days": N_DAYS,
+    win = {"ok": True, "data_date": tw_today().isoformat(), "n_days": N_DAYS,
            "stocks": stocks, "nodata": []}
     save_window(win)
     print(f"[種子·按日] 完成：{got_days} 交易日 × {len(stocks)} 檔 → {WINDOW_PATH.name}", flush=True)
@@ -289,7 +289,7 @@ def seed_bydate() -> int:
 # ── 種子模式（備援）：FinMind 抓近 N 交易日 ──
 
 def _secs_to_next_hour() -> int:
-    now = datetime.now()
+    now = tw_now()
     nxt = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     return int((nxt - now).total_seconds()) + HOUR_BUFFER
 
@@ -340,8 +340,8 @@ def seed_finmind() -> int:
     codes = sorted({s["code"] for s in daily["data"].get("stocks", [])
                     if len(s["code"]) == 4 and s["code"].isdigit()})
 
-    end = date.today().isoformat()
-    start = (date.today() - timedelta(days=400)).isoformat()  # 260 交易日 ≈ 375 天，多墊
+    end = tw_today().isoformat()
+    start = (tw_today() - timedelta(days=400)).isoformat()  # 260 交易日 ≈ 375 天，多墊
     print(f"[種子] {len(codes)} 檔，區間 {start}~{end}，視窗裁 {N_DAYS} 交易日")
 
     win = load_window()

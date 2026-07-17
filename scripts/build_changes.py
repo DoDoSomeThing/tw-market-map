@@ -14,7 +14,7 @@ import json
 from datetime import datetime
 
 from build_inst_rank import HISTORY_DIR, streak
-from tw_common import DATA_DIR, read_json, write_json
+from tw_common import DATA_DIR, read_json, tw_now, write_json
 
 STATE_PATH = DATA_DIR / "changes_state.json"
 HIST_NEWS = DATA_DIR / "history_news"
@@ -117,7 +117,7 @@ def main() -> None:
                 add_stock("rev", code, f"公布{ym}營收 {rv} 億 {yy} {mm}".rstrip())
         STATE_PATH.write_text(json.dumps(
             {"revenue_codes": sorted(rev_stocks), "revenue_ym": ym,
-             "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M")},
+             "saved_at": tw_now().strftime("%Y-%m-%d %H:%M")},
             ensure_ascii=False), encoding="utf-8")
 
     # ── 題材聲量暴增（今日 ≥5 且 ≥ 昨日 2 倍）──

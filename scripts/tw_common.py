@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -12,6 +12,23 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DOCS_DIR = ROOT / "docs"
+
+# ── 時區單一真相（2026-07-17）──
+# 本站處理的全是台股資料，「今天/現在」一律指台北時間。
+# 踩坑：原本用 datetime.now()／date.today()／astimezone()（跟著執行機器的時區跑）→
+# 本機（台北）測都對，但 GitHub Actions runner 是 UTC → 線上新聞時間少 8 小時、
+# freshness 在台北 08:00 前會把「今天」當成昨天而誤判過期。一律改用下列函式。
+TW_TZ = timezone(timedelta(hours=8))
+
+
+def tw_now() -> datetime:
+    """現在（台北）。不受執行機器時區影響。"""
+    return datetime.now(TW_TZ)
+
+
+def tw_today():
+    """今天（台北日期）。"""
+    return tw_now().date()
 
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) tw-market-map/1.0"}
 FETCH_INTERVAL = 3.0  # TWSE/TPEx 連續請求間隔秒數（防封 IP）
@@ -95,7 +112,7 @@ def data_age_days(data_date: str) -> int | None:
         d = datetime.strptime(str(data_date)[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
-    today = datetime.now().date()
+    today = tw_today()
     if d >= today:
         return 0
     age = 0
@@ -177,7 +194,7 @@ def write_json(name: str, payload: dict, *, data_date: str | None, source: str,
     env = {
         "ok": ok,
         "data_date": data_date,
-        "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "fetched_at": tw_now().strftime("%Y-%m-%d %H:%M:%S"),  # 台北時間（Actions 是 UTC）
         "source": source,
         "error": error,
         "data": payload,
