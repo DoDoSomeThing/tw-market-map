@@ -149,8 +149,20 @@ def stock_codes(limit: int | None) -> list[str]:
     env = read_json("daily_all")
     if not env.get("ok"):
         raise RuntimeError("daily_all.json 讀不到 → 先跑 fetch_daily_all.py")
-    codes = sorted({s["code"] for s in env["data"].get("stocks", [])
-                    if len(s["code"]) == 4 and s["code"].isdigit()})
+    codes = {s["code"] for s in env["data"].get("stocks", [])
+             if len(s["code"]) == 4 and s["code"].isdigit()}
+    # daily_all 只有上市;舊 opendata CSV 快照的宇宙大近千檔(上櫃)。
+    # union 既有快照的代號,否則 --force 重抓會讓上櫃股從歷史裡消失(2026-07-18 踩過:
+    # 07-03 有 2952 檔、06-26 只 1958,差的 994 檔全是上櫃)。
+    for p in HISTORY_DIR.glob("*.json"):
+        if ".partial" in p.name:
+            continue
+        try:
+            codes |= {k for k in json.loads(p.read_text(encoding="utf-8"))
+                      if len(k) == 4 and k.isdigit()}
+        except Exception:
+            continue
+    codes = sorted(codes)
     return codes[:limit] if limit else codes
 
 
