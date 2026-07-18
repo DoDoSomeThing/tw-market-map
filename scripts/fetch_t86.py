@@ -7,7 +7,8 @@ from datetime import date, timedelta
 
 from tw_common import (DATA_DIR, http_get_json, parse_num, roc_to_iso, tw_today, write_error, write_json)
 
-T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d8}&selectType=ALL&response=json"
+# selectType=ALLBUT0999：官方直接排除權證/牛熊證（ALL 會多回 1.2 萬檔權證，86% 是噪音）
+T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d8}&selectType=ALLBUT0999&response=json"
 TPEX_URL = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
 
 HISTORY_DIR = DATA_DIR / "history_t86"
