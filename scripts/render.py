@@ -22,7 +22,7 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
-<script>(function(){try{var t=localStorage.getItem("twmm_theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+<script>document.documentElement.dataset.theme="light";</script><!-- 2026-07-19 移除深色模式：固定淺色。dark CSS 保留未觸發，要復原改回 localStorage 切換版 -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
    Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
@@ -430,7 +430,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <body>
 <header class="top"><div class="top-inner">
   <div class="brand"><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><rect x="0" y="0" width="12" height="9" rx="1.5" fill="#e0433f"/><rect x="13" y="0" width="7" height="9" rx="1.5" fill="#00a37a"/><rect x="0" y="10" width="7" height="10" rx="1.5" fill="#00a37a"/><rect x="8" y="10" width="12" height="10" rx="1.5" fill="#e0433f"/></svg><h1>台股產業地圖</h1><span class="sub">自用・現況呈現・不預測</span>
-    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div><button id="theme-btn" class="theme-btn" aria-label="切換深淺色"></button></div>
+    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div></div>
   <nav class="tabs" id="tabs">
     <button class="tab" data-pane="focus">每日焦點</button>
     <button class="tab" data-pane="radar">時事雷達</button>
@@ -681,6 +681,7 @@ function openStock(code) {
                + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
         </div>
         <div id="sp-inst"></div>
+        <div id="sp-tdcc"></div>
         ${rankBadges}
         ${f.yq ? `<div class="sub" style="padding-top:4px">基本面季度：${f.yq}${f.debt_pct != null ? "｜負債比 " + f.debt_pct + "%" : ""}${bh ? "｜大戶為集保週資料（" + (DATA.tdcc.data_date || "").slice(5).replace("-", "/") + "）" : ""}${va.pe != null && va.pe > PE_ABSURD ? "｜⚠️ PE " + va.pe + " 倍係近四季每股僅賺 " + (r[3] / va.pe).toFixed(2) + " 元所致，PE 參考性差" : ""}</div>` : ""}
         ${news ? `<div class="news-links" style="margin-top:4px">${news}</div>` : `<div class="sub" style="padding:6px 0">近日無相關新聞標題</div>`}
@@ -714,6 +715,25 @@ function openStock(code) {
         <div class="inst-axis">${dates.map(x => `<span>${x.slice(5).replace("-", "/")}</span>`).join("")}</div>
         <div class="sub" style="padding-top:3px">右側為 ${seq.length} 日累計淨買賣超</div>
       </div>`;
+  });
+  loadTdccView().then(v => {
+    const el = document.getElementById("sp-tdcc");
+    if (!el || !v || !v.ok) return;
+    const ser = (v.data.series || {})[code];
+    if (!ser) return;
+    const dates = v.data.dates || [];
+    const LBL = ["200張+", "400張+", "800張+", "千張+"];
+    const rows = LBL.map((lb, ti) => {
+      const vals = ser.map(w => w[ti]);
+      if (vals.every(x => x == null)) return "";
+      const first = vals.find(x => x != null), last = [...vals].reverse().find(x => x != null);
+      const dlt = (first != null && last != null) ? Math.round((last - first) * 100) / 100 : null;
+      return `<tr><td class="sub">${lb}</td>${vals.map(x => `<td>${x == null ? "—" : x.toFixed(2)}</td>`).join("")}
+        <td class="${dlt != null ? cls(dlt) : ""}">${dlt != null ? (dlt > 0 ? "+" : "") + dlt.toFixed(2) : "—"}</td></tr>`;
+    }).join("");
+    if (!rows) return;
+    el.innerHTML = `<div class="sp-colhd">大戶級距趨勢 <span class="sub">佔集保庫存%・週資料・現況描述非訊號</span></div>
+      <div style="overflow-x:auto"><table style="font-size:.76rem"><tr><th></th>${dates.map(x => `<th>${x.slice(5).replace("-", "/")}</th>`).join("")}<th>Δpp</th></tr>${rows}</table></div>`;
   });
   loadTa().then(d => {
     const el = document.getElementById("sp-ta");
@@ -834,6 +854,14 @@ function renderWatchlist() {
 }
 renderWatchlist();
 
+// ── 大戶級距×期間（tdcc_view.json lazy fetch；大戶動向區、個股面板、今日異動三處共用）──
+// 必須宣告在 renderChanges() 的「呼叫點」之前——let 有 TDZ,擺後面會在首次 render 時 ReferenceError。
+let TDCCV = null;
+function loadTdccView() {
+  if (!TDCCV) TDCCV = fetch("tdcc_view.json").then(r => r.json()).catch(() => null);
+  return TDCCV;
+}
+
 // ── 今日異動 ──
 function renderChanges() {
   const env = DATA.changes, el = document.getElementById("changes");
@@ -842,7 +870,7 @@ function renderChanges() {
   const d = env.data, wl = new Set(wlGet());
   const ICON = { mops: "📢", flip: "🔄", news: "📰", rev: "💰", streak: "📈" };
   const line = (e, isWl) => `<div class="chg-item${isWl ? " wl" : ""}" onclick="openStock('${e.code}')">
-    ${ICON[e.t] || "•"} ${isWl ? `<span class="tag t重大">自選</span>` : ""}<b>${e.name}</b> <span class="sub">${e.code}</span>　${e.txt}</div>`;
+    ${ICON[e.t] || "•"} ${isWl ? `<span class="tag t重大">自選</span>` : ""}<b>${e.name}</b> <span class="sub">${e.code}</span>　${e.txt}<span class="sub" data-bh="${e.code}"></span></div>`;
   const wlEv = (d.stock_events || []).filter(e => wl.has(e.code));
   const others = (d.stock_events || []).filter(e => !wl.has(e.code));
   const brLists = (DATA.breadth.ok ? (DATA.breadth.data.lists || {}) : {});
@@ -866,6 +894,19 @@ function renderChanges() {
     return;
   }
   el.innerHTML = `<div class="chg-list">${mk}${tp}${wlHtml}${rest}</div>`;
+  // 異動股補「千張大戶 N 週增減」：異動當下一眼看到大戶早就在收/在跑(週資料,非即時)
+  loadTdccView().then(v => {
+    if (!v || !v.ok) return;
+    el.querySelectorAll("[data-bh]").forEach(sp => {
+      const ser = (v.data.series || {})[sp.dataset.bh];
+      if (!ser) return;
+      const vals = ser.map(w => w[3]).filter(x => x != null);
+      if (vals.length < 2) return;
+      const d = Math.round((vals[vals.length - 1] - vals[0]) * 100) / 100;
+      if (!d) return;
+      sp.innerHTML = `　千張${vals.length - 1}週<b class="${cls(d)}">${d > 0 ? "+" : ""}${d}pp</b>`;
+    });
+  });
   syncChangesHeight();
 }
 
@@ -1582,6 +1623,12 @@ function streakBadge(s) {
   }
   // 級距×期間對比（tdcc_view.json,lazy）：載入成功 → 切換 UI;失敗 → 退回下方原本週表。
   const TIER_LABEL = {r200: "200張+", r400: "400張+", r800: "800張+", r1000: "千張+"};
+  const TIER_DESC = {
+    r200: "200 張以上：門檻最低、涵蓋最廣 — 中實戶＋大散戶都算進來,看「有點錢的人」整體往哪站。",
+    r400: "400 張以上：傳統「大戶」門檻 — 中型法人、地方實戶為主,原本的預設視角。",
+    r800: "800 張以上：重倉持有者 — 接近千張的核心倉位,雜訊比 400 張少。",
+    r1000: "千張以上：最大持有人 — 大型股多為外資/基金;小型股常是公司派與主力,這級增減最值得盯。"};
+  const WK_DESC = "期間越長越能分辨「持續吃貨/出貨」與單週雜訊(吃貨是慢動作,1 週常看不出來)。";
   fetch("tdcc_view.json").then(r => r.json()).then(v => {
     if (!v || !v.ok || !Object.keys(v.data.rank || {}).length) return;
     const dv = v.data;
@@ -1599,8 +1646,9 @@ function streakBadge(s) {
       const chips = (items, cur, dscls) => items.map(([val, lab]) =>
         `<button class="chip${val === cur ? " active" : ""}" data-${dscls}="${val}">${lab}</button>`).join("");
       const periods = Object.keys(dv.rank[tier] || {}).sort();
-      el.innerHTML = `<div class="chips" style="margin-bottom:6px">${chips(dv.tiers.map(t => [t, TIER_LABEL[t]]), tier, "tier")}
-          <span class="sub" style="margin:0 4px">×</span>${chips(periods.map(p => [p, p + "週"]), wk, "wk")}</div>`
+      el.innerHTML = `<div class="chips" style="margin-bottom:2px">${chips(dv.tiers.map(t => [t, TIER_LABEL[t]]), tier, "tier")}
+          <span class="sub" style="margin:0 4px">×</span>${chips(periods.map(p => [p, p + "週"]), wk, "wk")}</div>
+        <div class="sub" style="padding:2px 2px 8px">${TIER_DESC[tier]} ${WK_DESC}</div>`
         + (rk ? `<div class="ranks">${vtbl("加碼 Top " + rk.inc.length, rk.inc)}${vtbl("減碼 Top " + rk.dec.length, rk.dec)}</div>
           <div class="sub" style="padding:4px 2px">${dv.dates[dv.dates.length-1].slice(5).replace("-","/")} vs ${rk.base.slice(5).replace("-","/")}｜門檻：日成交值 ≥ ${(dv.min_trade_value/1e8).toFixed(1)} 億</div>` : `<div class="sub">此組合無資料</div>`);
       el.querySelectorAll("[data-tier]").forEach(c => c.addEventListener("click", () => { tier = c.dataset.tier; draw(); }));
@@ -1737,11 +1785,15 @@ function fundLine(code) {
   if (!env.ok) { el.innerHTML = `<div class="err">新聞抓取失敗：${env.error || ""}</div>`; return; }
   const items = env.data.items || [];
   if (!items.length) { el.innerHTML = `<div class="sub">無新聞</div>`; return; }
+  // 投顧供稿標記：投顧欄/具名分析師引流稿混在新聞流裡跟真新聞長一樣。
+  // 2026-07 用 88k 則歷史新聞驗過:此類稿對後續報酬零預測力(部分為負)→ 標出來,描述不評價。
+  const FEEDER_RE = /[一-鿿]{2,4}投顧|莊佳螢|股魚|量大強漲股/;
   el.innerHTML = `<div class="mops-list">` + items.map(it => {
+    const feeder = FEEDER_RE.test(it.title) ? `<span class="tag" style="background:rgba(255,159,10,.16);color:#9a6a00">投顧供稿</span>` : "";
     const tags = (it.topics || []).map(t => `<span class="tag t財務">${t}</span>`).join("")
                + (it.stocks || []).map(s => `<span class="tag t治理">${s}</span>`).join("");
     return `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
-      <span class="tag t自結">${it.source}</span>${tags}
+      <span class="tag t自結">${it.source}</span>${feeder}${tags}
       <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`;
   }).join("") + `</div>`;
 })();
@@ -1874,26 +1926,8 @@ document.addEventListener("click", e => {
   if (hc) openStock(hc.dataset.code);
 });
 
-// ── 深淺色切換（head 已先定主題防閃爍；這裡只管按鈕與 meta）──
-(function () {
-  const SUN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
-  const MOON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
-  const btn = document.getElementById("theme-btn");
-  const meta = document.querySelector('meta[name="theme-color"]');
-  function paint() {
-    const t = document.documentElement.dataset.theme || "dark";
-    btn.innerHTML = t === "light" ? MOON : SUN;
-    btn.title = t === "light" ? "切到深色" : "切到淺色";
-    meta.setAttribute("content", t === "light" ? "#f2f5fa" : "#04060b");
-  }
-  paint();
-  btn.addEventListener("click", () => {
-    const t = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-    document.documentElement.dataset.theme = t;
-    localStorage.setItem("twmm_theme", t);
-    paint();
-  });
-})();
+// 深淺色切換已移除（2026-07-19,固定淺色）；meta theme-color 直接設淺色。
+document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f2f5fa");
 
 // PWA service worker（GitHub Pages 為 https；本機測試 http 不註冊）
 if ("serviceWorker" in navigator && location.protocol === "https:")
