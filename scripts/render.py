@@ -14,10 +14,8 @@ TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Fira Sans/Code：dashboard 專用字組，數字等寬對齊；載不到時 fallback 系統字（見 --sans/--num） -->
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Inter Variable（自帶 tabular figures）：本機內嵌、三平台一致，離線可用；中文 fallback 系統字（見 --sans） -->
+<link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
 <title>台股產業地圖</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#05070d">
@@ -26,21 +24,29 @@ TEMPLATE = """<!DOCTYPE html>
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>(function(){try{var t=localStorage.getItem("twmm_theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <style>
-/* 設計系統（2026-07-17 Bento 改版）— 依 ui-ux-pro-max 對 fintech dashboard 的建議：
-   Bento Grid（高資訊密度但不雜亂）＋ Fira Sans/Fira Code（數字等寬=金融標配）
-   ＋ 藍=資料、琥珀=需注意（給視線一個落點，解決「everything same weight」）。
-   全站樣式走這組變數 → 改這裡即改七個分頁。 */
+/* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
+   Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
+   ＋ 材質層級（blur chrome、卡片頂緣亮線）＋ spring 感 easing。
+   版面/資訊密度/紅漲綠跌不動。全站樣式走這組變數 → 改這裡即改七個分頁。 */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
 :root {
   --bg: #0a0e17; --panel: #121826; --panel2: #161d2e; --border: #232c40; --border-hi: #33415c;
   --fg: #e8edf5; --muted: #8a97ad;
-  --up: #ff4d4f; --down: #00c98d; --flat: #8a97ad; /* 台股紅漲綠跌 */
-  --warn: #f59e0b; --accent: #3b82f6; --accent-soft: rgba(59,130,246,.12);
-  --hi: #f59e0b; --hi-soft: rgba(245,158,11,.12);   /* 琥珀：需注意/次要焦點 */
-  --r: 18px; --r-sm: 12px; --gap: 16px; --tr: .2s ease;
+  --up: #ff453a; --down: #30d158; --flat: #8a97ad; /* 台股紅漲綠跌（Apple system red/green dark） */
+  --warn: #ff9f0a; --accent: #0a84ff; --accent-soft: rgba(10,132,255,.13);
+  --hi: #ff9f0a; --hi-soft: rgba(255,159,10,.12);   /* 琥珀：需注意/次要焦點 */
+  --r: 18px; --r-sm: 12px; --gap: 16px;
+  /* Apple 感 easing：快出緩收（iOS sheet 曲線），取代等速 ease */
+  --ease: cubic-bezier(.32,.72,0,1); --tr: .25s var(--ease);
   --surface: var(--panel);
-  --shadow: 0 8px 28px rgba(0,0,0,.28);
-  --num: "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --sans: "Fira Sans", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  /* 厚材質陰影＋頂緣一道極淡亮線（光打在材質上緣） */
+  --shadow: 0 10px 30px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.04);
+  --num: "Inter", -apple-system, ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   --bar-flat: #33415c;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,7 +55,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--sans); margin
   /* 區塊改卡片後，格線與卡片邊框會互相打架 → 只留頂部一道柔光，其餘乾淨 */
   background-image: radial-gradient(1000px 400px at 50% -160px, rgba(59,130,246,.10), transparent 70%);
   background-repeat: no-repeat; }
-h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.01em; }
+h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; } /* 大字負 tracking（apple-design §15） */
 /* 區塊＝一張 Bento 卡（不再是裸區塊直接堆）→ 密度不變但有邊界、不糊在一起 */
 section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   padding: 16px 18px; margin-bottom: var(--gap); transition: border-color var(--tr); }
@@ -64,9 +70,17 @@ h2::before { content: ""; display: inline-block; width: 6px; height: 6px; border
 ::-webkit-scrollbar-track { background: transparent; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* 按下即回饋（pointer-down，不等 click）：所有可點元件微縮（apple-design §1） */
+.tab:active, .chip:active, .theme-btn:active, .foldbtn:active, .ta-filter button:active,
+.ta-help-btn:active, .sr-badge:active, .rev-card:active, .radar-card:active, .wl-card:active,
+.card:active, .chg-item:active, .co:active { transform: scale(.97); transition-duration: .08s; }
+@media (prefers-reduced-motion: reduce) { .tab:active, .chip:active, .theme-btn:active, .foldbtn:active,
+  .ta-filter button:active, .ta-help-btn:active, .sr-badge:active, .rev-card:active, .radar-card:active,
+  .wl-card:active, .card:active, .chg-item:active, .co:active { transform: none; } }
 
 /* 頂部導覽 + 分頁 */
-header.top { position: sticky; top: 0; z-index: 50; background: rgba(4,6,11,.82); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); border-bottom: 1px solid rgba(46,69,115,.5); }
+/* chrome：實色（用戶不愛毛玻璃 2026-07-18）；硬分隔線改極淡 hairline＋柔陰影 */
+header.top { position: sticky; top: 0; z-index: 50; background: var(--bg); border-bottom: 1px solid rgba(255,255,255,.06); box-shadow: 0 1px 12px rgba(0,0,0,.25); }
 .top-inner { max-width: 1200px; margin: 0 auto; padding: 10px 12px 0; }
 .brand { display: flex; align-items: center; gap: 9px; padding-bottom: 7px; }
 .brand .logo { width: 20px; height: 20px; border-radius: 5px; flex: none; }
@@ -75,11 +89,11 @@ header.top { position: sticky; top: 0; z-index: 50; background: rgba(4,6,11,.82)
 .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { background: none; border: none; color: var(--muted); font-size: .92rem; padding: 9px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; font-family: inherit; border-radius: 8px 8px 0 0; transition: color var(--tr), background var(--tr); }
-.tab:hover { color: var(--fg); background: rgba(76,141,255,.08); }
+.tab:hover { color: var(--fg); background: rgba(10,132,255,.08); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .tabpane { display: none; }
-.tabpane.active { display: block; animation: paneIn .22s ease; }
+.tabpane.active { display: block; animation: paneIn .3s var(--ease); }
 /* ── 焦點頁 Bento 拼盤 ──
    原本 8 張卡由上到下各吃滿整寬 → 自選股只有 78px 高卻霸佔 1176px，整頁 4756px 要滾 5 個螢幕。
    改 12 欄 grid：矮卡(自選/寬度/指數)收進右側單欄疊放，其餘兩兩並排。
@@ -106,7 +120,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
   #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
   #pane-focus > .bento-col > section:last-child { margin-bottom: 0; }
 }
-@keyframes paneIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes paneIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* 搜尋 */
 .searchwrap { position: relative; margin-left: auto; }
@@ -169,8 +183,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 /* 均線格子 */
 .ma-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
 .ma-cell { border: 1px solid var(--border); border-radius: 8px; padding: 7px 6px; text-align: center; background: var(--panel); }
-.ma-cell.up { background: rgba(251,44,54,.10); border-color: rgba(251,44,54,.35); }
-.ma-cell.down { background: rgba(0,187,127,.10); border-color: rgba(0,187,127,.32); }
+.ma-cell.up { background: rgba(255,69,58,.10); border-color: rgba(255,69,58,.35); }
+.ma-cell.down { background: rgba(48,209,88,.10); border-color: rgba(48,209,88,.32); }
 .ma-cell .k { font-size: .72rem; color: var(--muted); }
 .ma-cell .v { font-size: .95rem; font-weight: 700; font-family: var(--num); margin: 1px 0; }
 .ma-cell .s { font-size: .72rem; }
@@ -180,7 +194,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .bb-wrap { margin: 8px 0; }
 .bb-head { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: 3px; }
 .bb-track { position: relative; height: 22px; border-radius: 5px;
-  background: linear-gradient(90deg, rgba(0,187,127,.22), rgba(125,138,160,.12) 50%, rgba(251,44,54,.22)); border: 1px solid var(--border); }
+  background: linear-gradient(90deg, rgba(48,209,88,.22), rgba(125,138,160,.12) 50%, rgba(255,69,58,.22)); border: 1px solid var(--border); }
 .bb-mid { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 1px; background: var(--muted); opacity: .6; }
 .bb-dot { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: var(--fg);
   border: 2px solid var(--bg); transform: translate(-50%, -50%); box-shadow: 0 0 0 1px var(--fg); }
@@ -191,7 +205,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .gauge-lbl { display: flex; justify-content: space-between; font-size: .78rem; margin-bottom: 2px; }
 .gauge-lbl b { font-family: var(--num); }
 .gauge-track { position: relative; height: 6px; border-radius: 3px; overflow: hidden;
-  background: linear-gradient(90deg, rgba(0,187,127,.5) 0 20%, rgba(125,138,160,.25) 20% 70%, rgba(251,44,54,.5) 70% 100%); }
+  background: linear-gradient(90deg, rgba(48,209,88,.5) 0 20%, rgba(125,138,160,.25) 20% 70%, rgba(255,69,58,.5) 70% 100%); }
 .gauge-dot { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px; background: var(--fg); transform: translateX(-50%); }
 
 /* 營收亮點卡 */
@@ -216,7 +230,8 @@ section { margin-bottom: 14px; }
 .cards > .card { flex: 1 0 140px; min-width: 0; }
 .card { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 13px 14px;
   transition: border-color var(--tr), transform var(--tr); }
-.card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
+/* 不上浮：.cards 容器 overflow-x:auto 會切掉上浮 2px 的頂邊框（hover 頂線消失 bug 2026-07-18） */
+.card:hover { border-color: var(--border-hi); }
 .card .nm { font-size: .74rem; color: var(--muted); }
 .card .px { font-size: 1.45rem; font-weight: 700; margin-top: 3px; font-family: var(--num); letter-spacing: -.02em; }
 .card .chg { font-size: .82rem; font-family: var(--num); }
@@ -257,7 +272,7 @@ tr:last-child td { border-bottom: none; }
 .chip .g { color: var(--muted); font-size: .7rem; margin-right: 4px; }
 .streak { font-size: .7rem; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 .streak.buy { background: rgba(255,69,58,.16); color: var(--up); }
-.streak.sell { background: rgba(0,201,141,.14); color: var(--down); }
+.streak.sell { background: rgba(48,209,88,.14); color: var(--down); }
 .tag { font-size: .7rem; border-radius: 4px; padding: 1px 6px; margin-right: 6px; white-space: nowrap; }
 .tag.t澄清 { background: rgba(255,171,36,.16); color: var(--warn); }
 .tag.t自結 { background: rgba(88,166,255,.15); color: #6cb2ff; }
@@ -266,7 +281,7 @@ tr:last-child td { border-bottom: none; }
 .tag.t重大 { background: rgba(255,69,58,.16); color: var(--up); }
 .mops-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); font-size: .85rem; max-height: 420px; overflow-y: auto; }
 .mops-item { padding: 8px 10px; border-bottom: 1px solid rgba(28,42,68,.55); line-height: 1.5; transition: background var(--tr); }
-.mops-item:hover { background: rgba(76,141,255,.05); }
+.mops-item:hover { background: rgba(10,132,255,.05); }
 .mops-item:last-child { border-bottom: none; }
 .mops-item .who { color: var(--fg); font-weight: 600; margin-right: 6px; }
 .mops-item .tm { color: var(--muted); font-size: .75rem; margin-right: 6px; }
@@ -278,8 +293,7 @@ tr:last-child td { border-bottom: none; }
 .radar-card.active { border-color: var(--accent); background: linear-gradient(180deg, #16264a, #101b31); }
 .radar-card b { font-size: .95rem; }
 .radar-heat { color: var(--warn); font-weight: 700; font-family: var(--num); }
-.news-links { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); font-size: .84rem; margin-top: 8px; }
-.news-links .mops-item a { color: var(--fg); text-decoration: none; }
+.news-links { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); font-size: .84rem; margin-top: 8px; }.news-links .mops-item a { color: var(--fg); text-decoration: none; }
 .news-links .mops-item a:hover { color: var(--accent); }
 
 /* 今日異動 */
@@ -290,7 +304,7 @@ tr:last-child td { border-bottom: none; }
 .chg-item { padding: 8px 11px; border-bottom: 1px solid rgba(28,42,68,.55); line-height: 1.5; cursor: pointer; transition: background var(--tr); }
 .chg-item:hover { background: var(--accent-soft); }
 .chg-item:last-child { border-bottom: none; }
-.chg-item.wl { background: rgba(76,141,255,.09); border-left: 2px solid var(--accent); }
+.chg-item.wl { background: rgba(10,132,255,.09); border-left: 2px solid var(--accent); }
 
 /* 手機：表格容器橫向捲動，不擠爆版面（min-width:0 讓 grid item 肯縮） */
 .ranks > div, .grid2 > div, #market > div, #topic-detail, #radar-detail, #tdcc, #fund, #instrank, #ranks { overflow-x: auto; min-width: 0; }
@@ -304,10 +318,11 @@ tr:last-child td { border-bottom: none; }
 .star:hover { transform: scale(1.15); }
 .star.on { color: var(--warn); }
 .wl-news { color: var(--muted); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-#sp-overlay { position: fixed; inset: 0; background: rgba(2,4,9,.6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); z-index: 90; display: none; animation: fadeIn .18s ease; }
-#sp-panel { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border-hi); border-radius: 14px; padding: 15px; display: none; box-shadow: var(--shadow); animation: spIn .18s ease; }
+#sp-overlay { position: fixed; inset: 0; background: rgba(2,4,9,.62); z-index: 90; display: none; animation: fadeIn .22s var(--ease); }
+#sp-panel { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border-hi); border-radius: 14px; padding: 15px; display: none; box-shadow: var(--shadow); animation: spIn .3s var(--ease); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes spIn { from { opacity: 0; transform: translate(-50%,-48.5%) scale(.97); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+/* materialize：scale＋位移一起進場，材質「到位」而非平淡淡入（apple-design §12） */
+@keyframes spIn { from { opacity: 0; transform: translate(-50%,-47.5%) scale(.96); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
 #sp-panel h3 { font-size: 1.05rem; padding-bottom: 4px; }
 #sp-panel .px { font-family: var(--num); }
 .sp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 9px 0; font-size: .84rem; }
@@ -380,18 +395,17 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
   color-scheme: light;
   --bg: #f5f5f7; --panel: #ffffff; --panel2: #fbfcfe; --border: #e5e9f0; --border-hi: #cfd8e6;
   --fg: #131a26; --muted: #5b6880;
-  --up: #d92d20; --down: #067a5b; --flat: #5b6880;
-  --warn: #b45309; --accent: #2563eb; --accent-soft: rgba(37,99,235,.09);
+  --up: #d70015; --down: #1d804c; --flat: #5b6880; /* Apple light red / 深化 green（白底可讀） */
+  --warn: #b45309; --accent: #0071e3; --accent-soft: rgba(0,113,227,.09); /* Apple 藍 */
   --hi: #b45309; --hi-soft: rgba(180,83,9,.10);
   --surface: #ffffff;
-  --shadow: 0 8px 28px rgba(23,35,58,.10);
+  --shadow: 0 10px 30px rgba(23,35,58,.10);
   --bar-flat: #cfd8e6;
 }
+/* 淺色背景去藍圖格線（Apple 乾淨底），只留頂部柔光 */
 :root[data-theme="light"] body { background-image:
-  radial-gradient(900px 360px at 50% -140px, rgba(37,99,235,.08), transparent 70%),
-  linear-gradient(90deg, rgba(37,99,235,.05) 1px, transparent 0),
-  linear-gradient(rgba(37,99,235,.05) 1px, transparent 0); }
-:root[data-theme="light"] header.top { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(183,197,220,.6); }
+  radial-gradient(900px 360px at 50% -140px, rgba(0,113,227,.07), transparent 70%); }
+:root[data-theme="light"] header.top { background: var(--bg); border-bottom: 1px solid rgba(0,0,0,.07); box-shadow: 0 1px 12px rgba(23,35,58,.06); }
 :root[data-theme="light"] .tab:hover { background: rgba(37,99,235,.07); }
 :root[data-theme="light"] th { background: rgba(238,243,250,.92); }
 :root[data-theme="light"] th, :root[data-theme="light"] td { border-bottom-color: rgba(219,227,239,.95); }
