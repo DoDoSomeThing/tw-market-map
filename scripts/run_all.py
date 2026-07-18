@@ -15,6 +15,7 @@ SCRIPTS = [
     "fetch_t86.py",
     "fetch_mops.py",
     "fetch_tdcc.py",
+    "build_tdcc_view.py",    # 大戶級距×期間對比 → data/tdcc_view.json（吃 history_tdcc 快照）
     "fetch_fundamentals.py",
     "fetch_valuation.py",   # PE/PB/市值（交易所每日公布值）
     "fetch_dividend.py",

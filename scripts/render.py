@@ -1580,6 +1580,35 @@ function streakBadge(s) {
       <td>${r.close ?? "—"}</td></tr>`).join("");
     return `<div><table><tr><th>${title}</th><th>週增減(pp)</th><th>400張+持股比</th><th>千張+</th><th>收盤</th></tr>${body}</table></div>`;
   }
+  // 級距×期間對比（tdcc_view.json,lazy）：載入成功 → 切換 UI;失敗 → 退回下方原本週表。
+  const TIER_LABEL = {r200: "200張+", r400: "400張+", r800: "800張+", r1000: "千張+"};
+  fetch("tdcc_view.json").then(r => r.json()).then(v => {
+    if (!v || !v.ok || !Object.keys(v.data.rank || {}).length) return;
+    const dv = v.data;
+    let tier = "r400", wk = "1";
+    function vtbl(title, rows) {
+      if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
+      const body = rows.map((r, i) => `<tr>
+        <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
+        <td class="${cls(r.delta)}">${pp(r.delta)}</td>
+        <td>${r.cur.toFixed(2)}%</td><td>${r.close ?? "—"}</td></tr>`).join("");
+      return `<div><table><tr><th>${title}</th><th>增減(pp)</th><th>${TIER_LABEL[tier]}持股比</th><th>收盤</th></tr>${body}</table></div>`;
+    }
+    function draw() {
+      const rk = (dv.rank[tier] || {})[wk];
+      const chips = (items, cur, dscls) => items.map(([val, lab]) =>
+        `<button class="chip${val === cur ? " active" : ""}" data-${dscls}="${val}">${lab}</button>`).join("");
+      const periods = Object.keys(dv.rank[tier] || {}).sort();
+      el.innerHTML = `<div class="chips" style="margin-bottom:6px">${chips(dv.tiers.map(t => [t, TIER_LABEL[t]]), tier, "tier")}
+          <span class="sub" style="margin:0 4px">×</span>${chips(periods.map(p => [p, p + "週"]), wk, "wk")}</div>`
+        + (rk ? `<div class="ranks">${vtbl("加碼 Top " + rk.inc.length, rk.inc)}${vtbl("減碼 Top " + rk.dec.length, rk.dec)}</div>
+          <div class="sub" style="padding:4px 2px">${dv.dates[dv.dates.length-1].slice(5).replace("-","/")} vs ${rk.base.slice(5).replace("-","/")}｜門檻：日成交值 ≥ ${(dv.min_trade_value/1e8).toFixed(1)} 億</div>` : `<div class="sub">此組合無資料</div>`);
+      el.querySelectorAll("[data-tier]").forEach(c => c.addEventListener("click", () => { tier = c.dataset.tier; draw(); }));
+      el.querySelectorAll("[data-wk]").forEach(c => c.addEventListener("click", () => { wk = c.dataset.wk; draw(); }));
+    }
+    draw();
+  }).catch(() => {});
+
   if (d.inc.length || d.dec.length) {
     el.innerHTML = `<div class="ranks">${tbl("大戶加碼 Top " + d.inc.length, d.inc)}${tbl("大戶減碼 Top " + d.dec.length, d.dec)}</div>
       <div class="sub" style="padding:4px 2px">對照週：${d.prev_week ? d.prev_week.slice(5).replace("-","/") : "—"}｜門檻：日成交值 ≥ ${(d.min_trade_value/1e8).toFixed(1)} 億。</div>`;
@@ -1954,6 +1983,13 @@ def main() -> None:
         print(f"[OK ] docs/ta.json（{n_ta} 檔）")
     data["ta_meta"] = {"ok": ta.get("ok", False), "data_date": ta.get("data_date"),
                        "note": ta["data"].get("note") if ta.get("ok") else None}
+
+    # 大戶級距×期間對比 → docs/tdcc_view.json（lazy fetch，~430KB 別內嵌）
+    tv = read_json("tdcc_view")
+    if tv.get("ok"):
+        (DOCS_DIR / "tdcc_view.json").write_text(
+            json.dumps(tv, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[OK ] docs/tdcc_view.json（{len(tv['data'].get('series', {}))} 檔 × {len(tv['data'].get('dates', []))} 週）")
 
     # 布林通道圖的收盤序列 → docs/closes80.json（lazy fetch，只在點開個股時抓）
     c80 = read_json("closes80")

@@ -1,6 +1,8 @@
-# fetch_tdcc.py — TDCC 集保戶股權分散（週資料）→ 400 張以上大戶持股比 + 週變化排行
-# 級距：12=400-600張 13=600-800 14=800-1000 15=千張以上 17=合計（股數 400,000=400 張）
+# fetch_tdcc.py — TDCC 集保戶股權分散（週資料）→ 大戶持股比（四級距）+ 週變化排行
+# 級距：11=200-400張 12=400-600 13=600-800 14=800-1000 15=千張以上 17=合計（股數 400,000=400 張）
 # 每週存快照 data/history_tdcc/，有前週快照才算得出增減；首週先列千張大戶比。
+# 快照格式（2026-07-18 起）：[r200, r400, r800, r1000] 四欄，與 backfill_tdcc.py 一致。
+# 更舊的快照是 [r400, r1000] 兩欄 → 讀取端一律用 len 判斷，別假設欄位位置。
 from __future__ import annotations
 
 import csv
@@ -16,7 +18,14 @@ TDCC_URL = "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5"
 HISTORY_DIR = DATA_DIR / "history_tdcc"
 TOP_N = 15
 MIN_TRADE_VALUE = 5e7     # 排行門檻：日成交值 ≥ 5 千萬（殭屍股的大戶比噪音大）
+LEVELS_200 = {"11", "12", "13", "14", "15"}
 LEVELS_400 = {"12", "13", "14", "15"}
+LEVELS_800 = {"14", "15"}
+
+
+def prev_r400(p: list) -> float:
+    """舊快照 [r400,r1000] 的 r400 在 [0];新快照 [r200,r400,r800,r1000] 在 [1]。"""
+    return p[1] if len(p) >= 4 else p[0]
 
 
 def download_csv() -> str:
@@ -50,13 +59,17 @@ def parse(text: str) -> tuple[dict, str]:
         if len(code) != 4 or not code.isdigit():
             continue
         data_date = data_date or d8
-        rec = stocks.setdefault(code, {"r400": 0.0, "r1000": 0.0, "holders": 0})
+        rec = stocks.setdefault(code, {"r200": 0.0, "r400": 0.0, "r800": 0.0, "r1000": 0.0, "holders": 0})
         try:
             pct = float(ratio)
         except ValueError:
             continue
+        if level in LEVELS_200:
+            rec["r200"] = round(rec["r200"] + pct, 2)
         if level in LEVELS_400:
             rec["r400"] = round(rec["r400"] + pct, 2)
+        if level in LEVELS_800:
+            rec["r800"] = round(rec["r800"] + pct, 2)
         if level == "15":
             rec["r1000"] = pct
         if level == "17":
@@ -69,7 +82,7 @@ def parse(text: str) -> tuple[dict, str]:
 
 def save_snapshot(iso: str, stocks: dict) -> None:
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    snap = {c: [v["r400"], v["r1000"]] for c, v in stocks.items()}
+    snap = {c: [v["r200"], v["r400"], v["r800"], v["r1000"]] for c, v in stocks.items()}
     (HISTORY_DIR / f"{iso}.json").write_text(
         json.dumps(snap, separators=(",", ":")), encoding="utf-8")
     # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：週資料、~59KB/支 → 壓縮後 ~1MB/年。
@@ -121,7 +134,7 @@ def main() -> None:
             s = info.get(code)
             if not s or (s.get("value") or 0) < MIN_TRADE_VALUE:
                 continue  # 無行情或成交太小
-            delta = round(rec["r400"] - p[0], 2)
+            delta = round(rec["r400"] - prev_r400(p), 2)
             if delta:
                 movers.append(enrich(code, rec, delta))
         movers.sort(key=lambda m: m["delta"], reverse=True)
@@ -140,7 +153,7 @@ def main() -> None:
     by_code = {}
     for code, rec in stocks.items():
         p = prev_snap.get(code)
-        delta = round(rec["r400"] - p[0], 2) if p else None
+        delta = round(rec["r400"] - prev_r400(p), 2) if p else None
         by_code[code] = [rec["r400"], rec["r1000"], delta, rec["holders"] or None]
 
     write_json("tdcc", {
