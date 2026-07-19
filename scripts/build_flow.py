@@ -75,8 +75,11 @@ def aggregate(groups: dict[str, list[str]], info: dict, stocks_t86: dict,
             "f_streak": streak_of(f_series),
             "t_streak": streak_of(t_series),
             "n": len(contrib),
+            # 原本只留 top3 → 前端族群展開只有三檔被罵。改列全部有感個股(|外資金額|≥0.1億),
+            # 依貢獻排序;塵埃級(四捨五入後 0.0)不列,免得半導體 100 檔塞爆展開列。
             "top": [{"code": c, "name": nm, "val": round(v / 1e8, 1)}
-                    for _a, c, nm, v in contrib[:3]],
+                    for _a, c, nm, v in contrib
+                    if abs(round(v / 1e8, 1)) >= 0.1],
         })
     out.sort(key=lambda x: x["f_val"], reverse=True)
     return out

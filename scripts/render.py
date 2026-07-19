@@ -721,19 +721,37 @@ function openStock(code) {
     if (!el || !v || !v.ok) return;
     const ser = (v.data.series || {})[code];
     if (!ser) return;
-    const dates = v.data.dates || [];
     const LBL = ["200張+", "400張+", "800張+", "千張+"];
+    const tierVals = ti => ser.map(w => w[ti]).filter(x => x != null);
+    const dlt = a => a.length >= 2 ? Math.round((a[a.length - 1] - a[0]) * 100) / 100 : null;
+    const fmt = d => `${d > 0 ? "+" : ""}${d.toFixed(2)}`;
+    // 一級一列：小折線 + 期末值 + N 週增減。折線看方向,不用讀數字。
     const rows = LBL.map((lb, ti) => {
-      const vals = ser.map(w => w[ti]);
-      if (vals.every(x => x == null)) return "";
-      const first = vals.find(x => x != null), last = [...vals].reverse().find(x => x != null);
-      const dlt = (first != null && last != null) ? Math.round((last - first) * 100) / 100 : null;
-      return `<tr><td class="sub">${lb}</td>${vals.map(x => `<td>${x == null ? "—" : x.toFixed(2)}</td>`).join("")}
-        <td class="${dlt != null ? cls(dlt) : ""}">${dlt != null ? (dlt > 0 ? "+" : "") + dlt.toFixed(2) : "—"}</td></tr>`;
+      const a = tierVals(ti);
+      if (a.length < 2) return "";
+      const d = dlt(a);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:2px 0">
+        <span class="sub" style="width:52px">${lb}</span>${sparkSVG(a, 90, 18)}
+        <span style="font-size:.78rem">${a[a.length - 1].toFixed(1)}%</span>
+        <b class="${cls(d)}" style="font-size:.78rem">${fmt(d)}pp</b></div>`;
     }).join("");
     if (!rows) return;
-    el.innerHTML = `<div class="sp-colhd">大戶級距趨勢 <span class="sub">佔集保庫存%・週資料・現況描述非訊號</span></div>
-      <div style="overflow-x:auto"><table style="font-size:.76rem"><tr><th></th>${dates.map(x => `<th>${x.slice(5).replace("-", "/")}</th>`).join("")}<th>Δpp</th></tr>${rows}</table></div>`;
+    // 白話一句:千張=主力/外資層;200張+=有錢人整體。只描述,不喊單。
+    const w1000 = tierVals(3), w200 = tierVals(0);
+    let talk = "";
+    if (w1000.length >= 2) {
+      const d1000 = dlt(w1000), n = w1000.length - 1;
+      const diffs = w1000.slice(1).map((x, i) => x - w1000[i]);
+      const oneway = diffs.every(x => x >= 0) || diffs.every(x => x <= 0);
+      talk = Math.abs(d1000) < 0.05
+        ? `千張大戶 ${n} 週幾乎沒動`
+        : `千張大戶 ${n} 週${d1000 > 0 ? "增持" : "減持"} ${Math.abs(d1000).toFixed(2)}pp${oneway ? "(連週同向)" : "(有進有出)"}`;
+      const d200 = w200.length >= 2 ? dlt(w200) : null;
+      if (d200 != null && Math.abs(d200) >= 0.05) talk += `；200張+ 整體${d200 > 0 ? "增" : "減"} ${Math.abs(d200).toFixed(2)}pp`;
+      talk += "。";
+    }
+    el.innerHTML = `<div class="sp-colhd">大戶持股走向 <span class="sub">週資料・佔集保庫存%</span></div>
+      ${rows}${talk ? `<div class="sub" style="padding:3px 0 0">${talk}折線=近 ${ser.length} 週方向。</div>` : ""}`;
   });
   loadTa().then(d => {
     const el = document.getElementById("sp-ta");
@@ -1373,7 +1391,7 @@ function streakBadge(s) {
       const lots = who === "f" ? r.f_lots : r.t_lots;
       const val = who === "f" ? r.f_value : r.t_value;
       const stk = who === "f" ? r.f_streak : r.t_streak;
-      return `<tr><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span>${streakBadge(stk)}</td>
+      return `<tr style="cursor:pointer" onclick="openStock('${r.code}')"><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span>${streakBadge(stk)}</td>
         <td class="${cls(lots)}">${lots > 0 ? "+" : ""}${lots.toLocaleString()}</td>
         <td class="${cls(val)}">${(Math.abs(val)/1e8).toFixed(1)}億</td>
         <td>${r.close}</td></tr>`;
@@ -1401,17 +1419,25 @@ function streakBadge(s) {
     if (s < -1) return `<span class="streak sell">連賣${-s}日</span>`;
     return "";
   }
+  // 族群列點開 → 展開主要個股 chips(每顆可點開個股面板)。原本個股塞在旁邊當純文字,點不了。
+  window.flowTog = tr => {
+    const n = tr.nextElementSibling;
+    if (n && n.classList.contains("flowsub")) n.style.display = n.style.display === "none" ? "" : "none";
+  };
   function tbl(title, rows) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-    const trs = rows.map(r => `<tr>
-      <td>${r.name} <span class="sub">${r.n}檔</span></td>
+    const trs = rows.map(r => `<tr style="cursor:pointer" onclick="flowTog(this)">
+      <td>${r.name} <span class="sub">${r.n}檔 ›</span></td>
       <td class="${cls(r.f_val)}">${sign(r.f_val)}億${stk(r.f_streak)}</td>
-      <td class="${cls(r.t_val)}">${sign(r.t_val)}億${stk(r.t_streak)}</td>
-      <td class="sub">${r.top.map(t => `${t.name}${sign(t.val)}`).join("、")}</td></tr>`);
+      <td class="${cls(r.t_val)}">${sign(r.t_val)}億${stk(r.t_streak)}</td></tr><tr class="flowsub" style="display:none"><td colspan="3" style="padding:6px 10px 10px"><div style="display:flex;flex-wrap:wrap;gap:6px">${r.top.map(t =>
+        `<span class="chip" style="white-space:nowrap" onclick="event.stopPropagation();openStock('${t.code}')">${t.name} <b class="${cls(t.val)}">${sign(t.val)}億</b></span>`).join("")}</div></td></tr>`);
     const N = 5;
-    const body = foldSlice(trs, N, h => h.replace("<tr>", '<tr class="foldx">'));
+    // 摺疊標記要同時掛「族群列」與其「展開子列」——標記靠字串比對,列開頭改了這裡要跟著改
+    const body = foldSlice(trs, N, h => h
+      .replace('<tr style="cursor:pointer"', '<tr class="foldx" style="cursor:pointer"')
+      .replace('<tr class="flowsub"', '<tr class="flowsub foldx"'));
     return `<div>${foldWrap(
-      `<table><tr><th>${title}</th><th>外資</th><th>投信</th><th>主要個股(億)</th></tr>${body}</table>`,
+      `<table><tr><th>${title} <span class="sub">點族群看個股</span></th><th>外資</th><th>投信</th></tr>${body}</table>`,
       trs.length, N, "族群")}</div>`;
   }
   const K = 8;
@@ -1504,7 +1530,7 @@ function streakBadge(s) {
       <span class="tm">${(h.time || "").slice(5)}</span><span class="tag t自結">${h.source}</span>
       <a href="${h.link}" target="_blank" rel="noopener">${h.title}</a></div>`).join("");
     const mopsHtml = (t.mops || []).map(m => `<div class="mops-item">
-      <span class="tag t${m.tag}">${m.tag}</span><span class="who">${m.name} <span class="sub">${m.code}</span></span>${m.subject}</div>`).join("");
+      <span class="tag t${m.tag}">${m.tag}</span><span class="who" style="cursor:pointer" onclick="openStock('${m.code}')">${m.name} <span class="sub">${m.code}</span></span>${m.subject}</div>`).join("");
     detailEl.innerHTML = `<div class="topic-desc"><b>${t.name}</b>　聲量 <span class="radar-heat">${t.heat}</span>（今日 ${t.n_today} 則、近 3 日 ${t.n_3d} 則）　題材日漲跌 <span class="${cls(t.avg_pct || 0)}">${t.avg_pct == null ? "—" : sign(t.avg_pct) + "%"}</span>
       　<span class="sub" style="cursor:pointer;text-decoration:underline" onclick="showTab('topics');showTopic('${t.id}',true)">→ 題材頁看熱力圖</span></div>
       ${memberTbl}
@@ -1594,7 +1620,7 @@ function streakBadge(s) {
   const d = env.data;
   function tbl(title, rows) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">${d.week_label || "無資料"}</td></tr></table></div>`;
-    const body = rows.map((r, i) => `<tr><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span></td>
+    const body = rows.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')"><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span></td>
       <td>${r.close}</td><td class="${cls(r.pct)}">${sign(r.pct)}%</td><td class="sub">${(r.value/1e8).toFixed(1)}億</td></tr>`).join("");
     return `<div><table><tr><th>${title}</th><th>收盤</th><th>漲跌</th><th>成交</th></tr>${body}</table></div>`;
   }
@@ -1614,7 +1640,7 @@ function streakBadge(s) {
   function pp(v) { return (v > 0 ? "+" : "") + v.toFixed(2); }
   function tbl(title, rows) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-    const body = rows.map((r, i) => `<tr>
+    const body = rows.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')">
       <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
       <td class="${cls(r.delta)}">${pp(r.delta)}</td>
       <td>${r.r400.toFixed(2)}%</td><td class="sub">${r.r1000.toFixed(2)}%</td>
@@ -1635,7 +1661,7 @@ function streakBadge(s) {
     let tier = "r400", wk = "1";
     function vtbl(title, rows) {
       if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-      const body = rows.map((r, i) => `<tr>
+      const body = rows.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')">
         <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
         <td class="${cls(r.delta)}">${pp(r.delta)}</td>
         <td>${r.cur.toFixed(2)}%</td><td>${r.close ?? "—"}</td></tr>`).join("");
@@ -1661,7 +1687,7 @@ function streakBadge(s) {
     el.innerHTML = `<div class="ranks">${tbl("大戶加碼 Top " + d.inc.length, d.inc)}${tbl("大戶減碼 Top " + d.dec.length, d.dec)}</div>
       <div class="sub" style="padding:4px 2px">對照週：${d.prev_week ? d.prev_week.slice(5).replace("-","/") : "—"}｜門檻：日成交值 ≥ ${(d.min_trade_value/1e8).toFixed(1)} 億。</div>`;
   } else if (d.top_r1000 && d.top_r1000.length) {
-    const body = d.top_r1000.map((r, i) => `<tr>
+    const body = d.top_r1000.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')">
       <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
       <td>${r.r1000.toFixed(2)}%</td><td>${r.r400.toFixed(2)}%</td><td>${r.close ?? "—"}</td></tr>`).join("");
     el.innerHTML = `<table><tr><th>千張大戶持股比 Top 20</th><th>千張+</th><th>400張+</th><th>收盤</th></tr>${body}</table>
@@ -1767,7 +1793,7 @@ function fundLine(code) {
   const d = env.data;
   function tbl(title, rows, fmt) {
     if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">無資料</td></tr></table></div>`;
-    const body = rows.map((r, i) => `<tr>
+    const body = rows.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')">
       <td>${i+1}. ${r.name || r.code} <span class="sub">${r.code}${r.industry ? "・" + r.industry : ""}</span></td>
       ${fmt(r)}<td>${r.close ?? "—"}</td></tr>`).join("");
     return `<div><table><tr><th>${title}</th>${title.includes("殖利率") ? "<th>殖利率</th><th>現金股利</th>" : "<th>毛利率</th><th>EPS</th>"}<th>收盤</th></tr>${body}</table></div>`;
@@ -1791,7 +1817,7 @@ function fundLine(code) {
   el.innerHTML = `<div class="mops-list">` + items.map(it => {
     const feeder = FEEDER_RE.test(it.title) ? `<span class="tag" style="background:rgba(255,159,10,.16);color:#9a6a00">投顧供稿</span>` : "";
     const tags = (it.topics || []).map(t => `<span class="tag t財務">${t}</span>`).join("")
-               + (it.stocks || []).map(s => `<span class="tag t治理">${s}</span>`).join("");
+               + (it.stocks || []).map(s => `<span class="tag t治理" style="cursor:pointer" onclick="openStock('${s.split(" ").pop()}')">${s}</span>`).join("");
     return `<div class="mops-item"><span class="tm">${(it.time || "").slice(5)}</span>
       <span class="tag t自結">${it.source}</span>${feeder}${tags}
       <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`;
@@ -1908,6 +1934,7 @@ function fundLine(code) {
     document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "pane-" + id));
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.pane === id));
     if (push) history.replaceState(null, "", location.pathname + location.search + "#tab=" + id);
+    document.querySelectorAll(".flowsub").forEach(x => x.style.display = "none");   // 切頁收合資金流展開
     window.scrollTo(0, 0);
     // 焦點頁藏著時量不到尺寸（全 0）→ 一顯示回來就重算左卡高度
     if (id === "focus") syncChangesHeight();
