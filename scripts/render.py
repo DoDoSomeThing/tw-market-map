@@ -1397,12 +1397,28 @@ function streakBadge(s) {
         <td>${r.close}</td></tr>`;
     });
     const N = 6;   // Top 15 全渲染，先露 6 名（四張表 ×15 列 = 這區 1269px 的來源）
-    const body = foldSlice(trs, N, h => h.replace("<tr>", '<tr class="foldx">'));
+    // foldx 靠字串比對——列開頭是 <tr style=...（可點列），別再寫 "<tr>"（2026-07-19 摺疊靜默壞過）
+    const body = foldSlice(trs, N, h => h.replace('<tr style="cursor:pointer"', '<tr class="foldx" style="cursor:pointer"'));
     return `<div>${foldWrap(
       `<table><tr><th>${title}</th><th>張數</th><th>估金額</th><th>收盤</th></tr>${body}</table>`,
       trs.length, N, "名")}</div>`;
   }
+  // 土洋共識:外資+投信同日同向,兩邊張數並列
+  function ctbl(title, rows) {
+    if (!rows || !rows.length) return `<div><table><tr><th>${title}</th></tr><tr><td class="sub">今日無（外資投信同向且金額達門檻）</td></tr></table></div>`;
+    const trs = rows.map((r, i) => `<tr style="cursor:pointer" onclick="openStock('${r.code}')"><td>${i+1}. ${r.name} <span class="sub">${r.code}・${r.industry}</span>${streakBadge(r.f_streak)}</td>
+        <td class="${cls(r.f_lots)}">${r.f_lots > 0 ? "+" : ""}${r.f_lots.toLocaleString()}</td>
+        <td class="${cls(r.t_lots)}">${r.t_lots > 0 ? "+" : ""}${r.t_lots.toLocaleString()}</td>
+        <td class="${cls(r.f_value)}">${((Math.abs(r.f_value) + Math.abs(r.t_value))/1e8).toFixed(1)}億</td>
+        <td>${r.close}</td></tr>`);
+    const N = 6;
+    const body = foldSlice(trs, N, h => h.replace('<tr style="cursor:pointer"', '<tr class="foldx" style="cursor:pointer"'));
+    return `<div>${foldWrap(
+      `<table><tr><th>${title}</th><th>外資(張)</th><th>投信(張)</th><th>合計估值</th><th>收盤</th></tr>${body}</table>`,
+      trs.length, N, "名")}</div>`;
+  }
   el.innerHTML = `<div class="ranks">
+    ${ctbl("土洋同買（外資+投信都買超）", d.co_buy)}${ctbl("土洋同賣（都賣超）", d.co_sell)}
     ${tbl("外資買超 Top 15", d.foreign_buy, "f")}${tbl("外資賣超 Top 15", d.foreign_sell, "f")}
     ${tbl("投信買超 Top 15", d.trust_buy, "t")}${tbl("投信賣超 Top 15", d.trust_sell, "t")}
   </div>` + (d.n_history_days < 3 ? `<div class="sub" style="padding:4px 2px">連買/連賣天數需累積快照（目前 ${d.n_history_days} 日），數字會隨天數變準。</div>` : "");

@@ -78,11 +78,24 @@ def main() -> None:
                                     "f_lots", "t_lots", "f_value", "t_value",
                                     "f_streak", "t_streak")} for r in pick]
 
+    def co(buy: bool) -> list:
+        """土洋共識:外資與投信同日同向。依兩者估值合計排序(門檻沿用 MIN_NET_VALUE)。"""
+        xs = [r for r in rows
+              if (r["f_value"] > 0) == buy and (r["t_value"] > 0) == buy
+              and r["f_value"] != 0 and r["t_value"] != 0
+              and abs(r["f_value"]) + abs(r["t_value"]) >= MIN_NET_VALUE]
+        xs.sort(key=lambda r: abs(r["f_value"]) + abs(r["t_value"]), reverse=True)
+        return [{k: r[k] for k in ("code", "name", "close", "industry",
+                                    "f_lots", "t_lots", "f_value", "t_value",
+                                    "f_streak", "t_streak")} for r in xs[:TOP_N]]
+
     write_json("inst_rank", {
         "foreign_buy": top("f_value", True),
         "foreign_sell": top("f_value", False),
         "trust_buy": top("t_value", True),
         "trust_sell": top("t_value", False),
+        "co_buy": co(True),
+        "co_sell": co(False),
         "n_history_days": len(list(HISTORY_DIR.glob("????-??-??.json"))),
     }, data_date=t86.get("data_date"), source=t86.get("source"), error=t86.get("error"))
 
