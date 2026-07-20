@@ -47,8 +47,22 @@ def _curl_get_json(url: str, timeout: int):
     return json.loads(r.stdout)
 
 
+def _describe(r) -> str:
+    """把「200 但不是 JSON」講清楚：狀態碼 + content-type + body 前 200 字。
+
+    2026-07-20 踩過：TWSE openapi 對 GitHub Actions 間歇回非 JSON，錯誤訊息只有
+    `Expecting value: line 1 column 1 (char 0)`——沒有狀態碼、沒有 body，
+    完全查不出是擋頁、空回應還是改版。整整一天的上市資料靜靜掉光才被發現。
+    """
+    body = (r.text or "")[:200].replace("\n", " ").strip()
+    return (f"HTTP {r.status_code} "
+            f"content-type={r.headers.get('content-type', '?')} "
+            f"len={len(r.text or '')} body[:200]={body!r}")
+
+
 def http_get_json(url: str, *, timeout: int = 30, retries: int = 2):
-    """帶間隔與重試的 GET，回 parsed JSON。失敗 raise。"""
+    """帶間隔與重試的 GET，回 parsed JSON。失敗 raise（訊息含狀態碼與 body 片段）。"""
+    last_err = None
     for attempt in range(retries + 1):
         wait = FETCH_INTERVAL - (time.time() - _last_fetch[0])
         if wait > 0:
@@ -57,14 +71,20 @@ def http_get_json(url: str, *, timeout: int = 30, retries: int = 2):
             r = requests.get(url, headers=UA, timeout=timeout)
             _last_fetch[0] = time.time()
             r.raise_for_status()
-            return r.json()
+            try:
+                return r.json()
+            except ValueError as e:
+                # 200 卻不是 JSON：擋頁/WAF/維護頁/空 body。把現場帶出去，別只留一句 parse 失敗。
+                raise RuntimeError(f"回應不是 JSON（{_describe(r)}）") from e
         except requests.exceptions.SSLError:
             _last_fetch[0] = time.time()
             return _curl_get_json(url, timeout)
-        except Exception:
+        except Exception as e:
+            last_err = e
             if attempt >= retries:
-                raise
+                raise RuntimeError(f"{url} 抓取失敗（試 {retries + 1} 次）：{e}") from e
             time.sleep(5 * (attempt + 1))
+    raise RuntimeError(f"{url} 抓取失敗：{last_err}")
 
 
 def roc_to_iso(roc: str) -> str | None:
@@ -208,6 +228,36 @@ def write_json(name: str, payload: dict, *, data_date: str | None, source: str,
 def write_error(name: str, source: str, error: str) -> None:
     """抓取失敗時寫錯誤信封（render 端顯示 ⚠️，絕不拿舊資料裝新鮮）。"""
     write_json(name, {}, data_date=None, source=source, ok=False, error=error[:300])
+
+
+def carry_over(name: str, key: str, fresh: dict, *, errs: list[str]) -> tuple[dict, str | None]:
+    """某個來源掛了 → 缺的個股沿用前次值，不要用殘缺資料覆蓋完整資料。
+
+    2026-07-20 事故：TWSE openapi 間歇對 GitHub Actions 回非 JSON，上市那批整個抓不到。
+    當時的寫法是「有上櫃就照寫」→ valuation 從 1968 檔變成 889 檔，
+    台積電/聯發科/鴻海直接從網站上消失，而且 pipeline 全綠、沒人發現。
+
+    只在 errs 非空時才補（正常跑不補，才不會讓下市股永遠賴著）。
+    回 (合併後的 dict, 補充說明)；沒補則說明為 None。
+
+    name  data/<name>.json 的檔名
+    key   信封 data 底下放個股 dict 的欄位名（如 "stocks"）
+    fresh 這次真的抓到的 {code: ...}
+    """
+    if not errs:
+        return fresh, None
+    env = read_json(name)
+    if not env.get("ok"):
+        return fresh, None
+    prev = (env.get("data") or {}).get(key) or {}
+    missing = {c: v for c, v in prev.items() if c not in fresh}
+    if not missing:
+        return fresh, None
+    merged = {**missing, **fresh}   # 這次抓到的優先，舊值只補洞
+    note = (f"{len(missing)} 檔沿用 {env.get('data_date')} 資料"
+            f"（本次來源失敗，寧可標舊也不讓個股消失）")
+    print(f"[WARN] {name}: {note}")
+    return merged, note
 
 
 def read_json(name: str) -> dict:

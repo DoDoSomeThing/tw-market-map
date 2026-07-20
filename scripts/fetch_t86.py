@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from tw_common import (DATA_DIR, http_get_json, parse_num, roc_to_iso, tw_today, write_error, write_json)
+from tw_common import (DATA_DIR, carry_over, http_get_json, parse_num, roc_to_iso, tw_today,
+                       write_error, write_json)
 
 # selectType=ALLBUT0999：官方直接排除權證/牛熊證（ALL 會多回 1.2 萬檔權證，86% 是噪音）
 T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d8}&selectType=ALLBUT0999&response=json"
@@ -80,12 +81,24 @@ def fetch_tpex() -> tuple[dict, str] | None:
     return out, d_iso
 
 
-def save_snapshot(data_date: str, stocks: dict) -> None:
-    """{code: [外資net, 投信net]}（股）供連買計算；同日重跑覆蓋。"""
+def save_snapshot(data_date: str, stocks: dict) -> str | None:
+    """{code: [外資net, 投信net]}（股）供連買計算；同日重跑覆蓋。回警告字串或 None。"""
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     snap = {c: [v["f"], v["t"]] for c, v in stocks.items()}
-    (HISTORY_DIR / f"{data_date}.json").write_text(
-        json.dumps(snap, separators=(",", ":")), encoding="utf-8")
+    p = HISTORY_DIR / f"{data_date}.json"
+    # 檔數變少不覆蓋：某一市場抓失敗時，會拿殘缺快照蓋掉完整的正本，
+    # 而連買 n 日是靠這些快照回推的——歷史被打洞，連買天數就永遠算錯。
+    old_n = 0
+    if p.exists():
+        try:
+            old_n = len(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            old_n = 0
+    if len(snap) < old_n:
+        print(f"[WARN] history_t86 {data_date}: 本次 {len(snap)} 檔 < 既有 {old_n} 檔 → 不覆蓋")
+        return f"t86 快照保留原檔：本次僅 {len(snap)} 檔 < 既有 {old_n} 檔"
+    p.write_text(json.dumps(snap, separators=(",", ":")), encoding="utf-8")
+    return None
     # 永久累積（append-only 正本，2026-07-16 起不再砍舊檔）：
     # 舊檔永不改 → git 只存新增那支（~281KB/天、壓縮後 ~14MB/年）。法人歷史是資產，砍掉就追不回。
     # 消費端都只讀最近幾支（render inst10 取 [-10:]、build_changes 取 [:8]），累積不影響效能。
@@ -127,7 +140,15 @@ def main() -> None:
     if len(set(dates)) > 1:
         errs.append(f"上市/上櫃法人資料日不一致:{sorted(set(dates))}")
     if data_date:
-        save_snapshot(data_date, stocks)
+        warn = save_snapshot(data_date, stocks)
+        if warn:
+            errs.append(warn)
+
+    # 沿用必須在 save_snapshot 之後：快照是「連買 n 日」的計算基礎，
+    # 混進前一日的數字會讓連買天數平白多一天（等於憑空造出訊號）。
+    stocks, carried = carry_over("t86", "stocks", stocks, errs=errs)
+    if carried:
+        errs.append(carried)
 
     write_json("t86", {"stocks": stocks},
                data_date=data_date, source="TWSE T86 + TPEx 3insti（股數）",

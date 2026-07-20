@@ -6,7 +6,8 @@
 # 季資料：freshness 放寬（render 端 maxStale=95 交易日）。
 from __future__ import annotations
 
-from tw_common import http_get_json, parse_num, read_json, roc_to_iso, write_error, write_json
+from tw_common import (carry_over, http_get_json, parse_num, read_json, roc_to_iso,
+                       write_error, write_json)
 
 TWSE = "https://openapi.twse.com.tw/v1/opendata/"
 TPEX = "https://www.tpex.org.tw/openapi/v1/"
@@ -170,6 +171,15 @@ def main() -> None:
     if not stocks:
         write_error("fundamentals", "TWSE/TPEx 財報 openapi", "；".join(errs) or "無資料")
         return
+
+    # 來源掛掉時補回前次的個股（見 tw_common.carry_over）。放在排行計算之前，
+    # 沿用的個股才會一起參與殖利率/毛利排行，不然榜上會只剩上櫃。
+    prev_env = read_json("fundamentals")
+    stocks, carried = carry_over("fundamentals", "stocks", stocks, errs=errs)
+    if carried:
+        errs.append(carried)
+        if not dates and prev_env.get("data_date"):
+            dates.append(prev_env["data_date"])   # 全掛時別讓 data_date=None（前端會當「無資料」）
 
     # ── join 收盤 → 殖利率 + 排行 ──
     daily = read_json("daily_all")
