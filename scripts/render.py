@@ -329,8 +329,11 @@ tr:last-child td { border-bottom: none; }
 .sp-cell { background: rgba(4,6,11,.55); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; }
 .sp-cell .lbl { color: var(--muted); font-size: .7rem; display: block; }
 /* 雙欄個股面板：左=基本資料+法人+新聞、右=技術面。
-   桌機目標「一頁看完不捲動」→ 容器放寬 + 內容壓縮；≤820px（手機/窄窗）才退單欄並允許捲動。 */
-#sp-panel.sp-wide { width: min(1060px, 96vw); max-height: 94vh; overflow-y: hidden; }
+   桌機目標「一頁看完不捲動」→ 容器放寬 + 內容壓縮；≤820px（手機/窄窗）才退單欄並允許捲動。
+   overflow 用 auto 不能用 hidden：hidden 在放得下時跟 auto 沒差別，放不下時卻是「切掉且捲不到」。
+   實測視窗高 ≤700px 內容就超出 → 最底下的相關新聞被吃掉、使用者完全沒辦法看到（2026-07-20 回報）。
+   auto 保留了原本「塞得下就不出現捲軸」的目標，塞不下才給捲軸。 */
+#sp-panel.sp-wide { width: min(1060px, 96vw); max-height: 94vh; overflow-y: auto; }
 .sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .sp-two .sp-col { min-width: 0; }
 .sp-two .sp-grid { grid-template-columns: repeat(3, 1fr); padding: 6px 0; gap: 5px; }
