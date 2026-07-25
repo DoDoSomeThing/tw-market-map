@@ -614,6 +614,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div class="sub">勾選條件取「交集」（AND）｜法人連買賣、技術狀態、量價全用寫死規則｜結果為現況篩選、非買賣建議</div>
 <div id="scr-conds"></div>
 <div id="scr-result"></div></section>
+<section id="sec-margintrend"><h2>大盤融資餘額趨勢 <span class="stamp" data-stamp="margintrend"></span></h2>
+<div class="sub">近期全市場融資餘額（億）｜升＝散戶槓桿加碼、降＝去槓桿｜現況描述、非訊號</div>
+<div id="margintrend"></div></section>
 <section id="sec-margin"><h2>融資餘額增減榜 <span class="stamp" data-stamp="margin"></span></h2>
 <div class="sub">融資＝散戶借錢買股。今日餘額 − 前日餘額（張）｜增＝散戶加碼槓桿、減＝去槓桿｜僅上市、濾餘額 ≥500 張｜點列開個股｜現況描述、非訊號</div>
 <div id="margin"></div></section>
@@ -667,7 +670,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 00:53";
+const BUILT_AT = "2026-07-26 00:56";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -2182,6 +2185,33 @@ function fundLine(code) {
     <svg class="sent-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
       <line class="mid" x1="${padL}" y1="${midY}" x2="${W - padR}" y2="${midY}"/>
       <text x="2" y="${midY + 3}">50%</text>
+      <polyline class="ln" points="${pts}"/>${dots}${labels}
+    </svg>`;
+})();
+(function () {   // ── 大盤融資餘額趨勢（讀 market_trend，折線，跳過缺值）──
+  const env = DATA.market_trend, el = document.getElementById("margintrend");
+  const stamp = document.querySelector('[data-stamp="margintrend"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">融資趨勢資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const s = (env.data.series || []).slice(-20).filter(d => d.margin_bal != null);
+  if (s.length < 2) { el.innerHTML = `<div class="sub">融資餘額歷史不足</div>`; return; }
+  const W = 720, H = 156, padT = 16, padB = 22, padL = 46, padR = 8;
+  const plotH = H - padT - padB, plotW = W - padL - padR, n = s.length;
+  const vals = s.map(d => d.margin_bal);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.15 || 1; lo -= pad; hi += pad;
+  const X = i => padL + (n === 1 ? plotW / 2 : i * plotW / (n - 1));
+  const Y = v => padT + (hi - v) / (hi - lo) * plotH;
+  const pts = s.map((d, i) => `${X(i).toFixed(1)},${Y(d.margin_bal).toFixed(1)}`).join(" ");
+  const dots = s.map((d, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(d.margin_bal).toFixed(1)}" r="2.6" fill="var(--accent)"><title>${d.date}　融資餘額 ${d.margin_bal} 億</title></circle>`).join("");
+  const labels = [0, Math.floor(n / 2), n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${s[i].date.slice(5)}</text>`).join("");
+  const last = s[s.length - 1], chg = last.margin_bal - s[0].margin_bal;
+  el.innerHTML = `<div class="trend-head">
+      <span>最新融資餘額 <b>${last.margin_bal.toLocaleString()}</b> 億</span>
+      <span class="sub">近 ${n} 日 <b class="${chg >= 0 ? "up" : "down"}">${chg > 0 ? "+" : ""}${chg.toFixed(0)}</b> 億</span>
+    </div>
+    <svg class="sent-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
+      <text x="2" y="${(Y(hi) + 9).toFixed(0)}">${Math.round(hi)}</text><text x="2" y="${Y(lo).toFixed(0)}">${Math.round(lo)}</text>
       <polyline class="ln" points="${pts}"/>${dots}${labels}
     </svg>`;
 })();
