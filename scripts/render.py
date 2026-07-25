@@ -309,6 +309,16 @@ tr:last-child td { border-bottom: none; }
 .rc-chip { font-size: .8rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; font-family: inherit; transition: border-color var(--tr); }
 .rc-chip:hover { border-color: var(--border-hi); }
 
+/* 名詞小百科 */
+.gloss-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.gloss-grid details { border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; background: var(--panel); }
+.gloss-grid summary { cursor: pointer; font-weight: 600; font-size: .9rem; list-style: none; }
+.gloss-grid summary::-webkit-details-marker { display: none; }
+.gloss-grid summary::before { content: "＋"; color: var(--accent); margin-right: 7px; font-weight: 700; }
+.gloss-grid details[open] summary::before { content: "－"; }
+.gloss-grid details[open] summary { margin-bottom: 6px; }
+.gloss-grid p { margin: 0; font-size: .84rem; line-height: 1.65; color: var(--muted); }
+
 /* 外資買賣超趨勢圖 */
 .trend-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 6px; }
 .trend-head b { font-size: 1.25rem; }
@@ -584,6 +594,26 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div id="cmp-result"></div></section>
 <section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
+<section id="sec-glossary"><h2>名詞小百科</h2>
+<div class="sub">點開看白話解釋｜幫你看懂本站數字，非投資建議</div>
+<div class="gloss-grid">
+  <details><summary>外資／投信買賣超</summary><p>外資（外國機構）、投信（國內基金）當日買進金額大於賣出＝買超（正），反之賣超（負）。數百家機構彙總後的淨額，非單一筆資金移動。</p></details>
+  <details><summary>連買／連賣</summary><p>連續 N 個交易日同方向買超或賣超。連買 5 日＝連 5 個交易日都買超；天數多代表傾向較持續，非保證續買。</p></details>
+  <details><summary>融資餘額</summary><p>投資人向券商借錢買股的未償還總額。增加＝散戶偏樂觀加碼（槓桿），減少＝去槓桿。餘額高檔常被視為賣壓潛在來源。</p></details>
+  <details><summary>融券餘額</summary><p>投資人借股票來賣（看跌）的未回補張數。融券增＝看空力道增；遇利多可能「軋空」急漲回補。</p></details>
+  <details><summary>本益比 PE</summary><p>股價 ÷ 每股盈餘（EPS）。約略代表「幾年賺回股價」。EPS 接近 0 時 PE 會爆高、失去參考性（本站會標 ⚠️）。</p></details>
+  <details><summary>股價淨值比 PB</summary><p>股價 ÷ 每股淨值。&lt;1 代表股價低於帳面淨值。常用於資產股、金融股評估，成長股參考性較低。</p></details>
+  <details><summary>殖利率</summary><p>每股現金股利 ÷ 股價。代表以現價買進、單看配息的報酬率。高殖利率不等於好投資，要看配息是否穩定。</p></details>
+  <details><summary>位階（52 週）</summary><p>收盤價在「近 52 週高低區間」的相對位置。100%＝當日創 52 週新高、0%＝創新低。本站 ≥95% 列近高、≤5% 列近低。</p></details>
+  <details><summary>量比</summary><p>今日成交量 ÷ 近 20 日均量。≥2 倍＝爆量（資金明顯進出）。放量常伴隨變盤，方向仍要配合價格判斷。</p></details>
+  <details><summary>年線（240 日均線）</summary><p>近 240 個交易日收盤均價，代表長期成本。站上年線＝多數持有者處於獲利、長多；跌破＝長空。</p></details>
+  <details><summary>多頭／空頭排列</summary><p>短中長期均線由上而下排好（短&gt;中&gt;長）＝多頭排列，趨勢向上；反過來＝空頭排列，趨勢向下。</p></details>
+  <details><summary>KD／RSI</summary><p>技術指標。KD 看短期超買（&gt;80）／超賣（&lt;20）與交叉；RSI 看買賣力道強弱。皆為描述性參考，非買賣訊號。</p></details>
+  <details><summary>大戶（400 張+）</summary><p>集保資料中持股 400 張以上的股東（約中型法人／地方實戶）。持股比上升＝籌碼往大戶集中。每週結算、週六公布。</p></details>
+  <details><summary>上漲成交值占比</summary><p>上漲股票的成交值 ÷ 全市場成交值。偏低（如 17%）代表錢集中在少數強勢股、多數股弱；偏高代表普漲。</p></details>
+  <details><summary>市場寬度</summary><p>上漲家數 vs 下跌家數的對比。齊跌且上漲值占比低＝系統性賣壓；齊漲＝普漲行情。反映情緒廣度。</p></details>
+  <details><summary>除息／除權</summary><p>公司配發現金（除息）或股票（除權）後，股價依配發金額往下調整（參考價）。填息＝除息後股價漲回原點。</p></details>
+</div></section>
 </div>
 
 <div class="tabpane" id="pane-fund">
