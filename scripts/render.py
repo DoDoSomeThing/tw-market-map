@@ -282,6 +282,11 @@ tr:last-child td { border-bottom: none; }
 .al-tag.down { color: var(--down); background: rgba(48,209,88,.12); }
 .al-tag.warn { color: var(--warn); background: rgba(255,159,10,.13); }
 
+/* 熱力圖上色模式切換 */
+.hm-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; vertical-align: middle; }
+.hm-mb { background: var(--panel); border: none; color: var(--muted); font-size: .78rem; padding: 4px 10px; cursor: pointer; font-family: inherit; }
+.hm-mb.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
 /* 週轉率榜 */
 .tn-row { display: flex; align-items: baseline; gap: 6px 12px; padding: 7px 0; border-bottom: 1px solid var(--border); cursor: pointer; flex-wrap: wrap; }
 .tn-row:last-child { border-bottom: 0; }
@@ -598,8 +603,8 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 
 <div class="tabpane" id="pane-market">
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span>
-  <span style="float:right"><select id="lookback"></select></span></h2>
-  <div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔<span id="lookback-note"></span></div><div id="heatmap"></div></section>
+  <span style="float:right"><span class="hm-mode"><button class="hm-mb on" data-mode="pct">依漲跌</button><button class="hm-mb" data-mode="foreign">依外資</button></span> <select id="lookback"></select></span></h2>
+  <div class="sub">格子大小=成交值｜顏色<span id="hm-legend">=漲跌%（紅漲綠跌）</span>｜各產業取成交值前 25 檔<span id="lookback-note"></span></div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
 <section id="sec-highlow"><h2>逼近 52 週高／低 <span class="stamp" data-stamp="highlow"></span></h2>
 <div class="sub">pos52w ≥95%（近高）／≤5%（近低）｜=100%/0% 為當日創新高/低｜依成交值排序｜點列開個股｜現況描述、非訊號</div>
@@ -1526,7 +1531,18 @@ function pctColor(p) {
   if (p < 0) return `rgb(${Math.round(35)}, ${Math.round(60+110*t)}, ${Math.round(55+25*t)})`;
   return "#30363d";
 }
+let hmColorMode = "pct", hmLastGroups = null;   // 熱力圖上色模式：漲跌 / 外資買賣超
+function foreignColor(code) {
+  // 外資張（q[7]）：買超紅、賣超綠，強度到 ±3000 張飽和
+  const q = QUOTES[code], f = q ? (q[7] || 0) : 0;
+  const t = Math.min(Math.abs(f) / 3000, 1);
+  if (f > 0) return `rgb(${Math.round(60+140*t)}, ${Math.round(60-15*t)}, ${Math.round(55-10*t)})`;
+  if (f < 0) return `rgb(35, ${Math.round(60+110*t)}, ${Math.round(55+25*t)})`;
+  return "#30363d";
+}
+function cellColor(c) { return hmColorMode === "foreign" ? foreignColor(c.code) : pctColor(c.pct); }
 function drawHeatmap(groups) {
+  hmLastGroups = groups;
   const el = document.getElementById("heatmap");
   const totalValue = groups.reduce((s, g) => s + g.value, 0);
   const W = Math.min(el.clientWidth || document.body.clientWidth, 1176);
@@ -1540,7 +1556,7 @@ function drawHeatmap(groups) {
     const boxes = out.map(c => {
       const fs = Math.max(9, Math.min(16, Math.sqrt(c.w * c.h) / 6));
       const showPct = c.h > 26 && c.w > 40;
-      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
+      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${cellColor(c)};font-size:${fs.toFixed(0)}px"
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%　成交 ${(c.value/1e8).toFixed(1)}億">
         <span class="c-nm">${c.name}</span>${showPct ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
@@ -1554,6 +1570,18 @@ function drawHeatmap(groups) {
   document.querySelector('[data-stamp="heatmap"]').innerHTML = stampFor(env);
   if (!env.ok) { document.getElementById("heatmap").innerHTML = `<div class="err">熱力圖資料失敗：${env.error || ""}</div>`; return; }
   drawHeatmap(env.data.groups);
+})();
+// 熱力圖上色模式切換（依漲跌 / 依外資買賣超；外資恆用今日 QUOTES）
+(function () {
+  const btns = document.querySelectorAll(".hm-mb");
+  const legend = document.getElementById("hm-legend");
+  btns.forEach(b => b.addEventListener("click", () => {
+    hmColorMode = b.dataset.mode;
+    btns.forEach(x => x.classList.toggle("on", x === b));
+    if (legend) legend.textContent = hmColorMode === "foreign"
+      ? "=外資買賣超（紅買綠賣、今日）" : "=漲跌%（紅漲綠跌）";
+    if (hmLastGroups) drawHeatmap(hmLastGroups);
+  }));
 })();
 
 // ── 日期回看（熱力圖顏色以歷史快照重建；格子大小沿用最新成交值=近似）──
@@ -1708,7 +1736,7 @@ function streakBadge(s) {
     squarify(cells, 0, 0, W, h, out);
     const boxes = out.map(c => {
       const fs = Math.max(9, Math.min(15, Math.sqrt(c.w * c.h) / 6));
-      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${pctColor(c.pct)};font-size:${fs.toFixed(0)}px"
+      return `<div class="hm-cell" data-code="${c.code}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;width:${c.w.toFixed(1)}px;height:${c.h.toFixed(1)}px;background:${cellColor(c)};font-size:${fs.toFixed(0)}px"
         title="${c.code} ${c.name}　收 ${c.close}　${sign(c.pct)}%">
         <span class="c-nm">${c.name}</span>${c.h > 26 && c.w > 40 ? `<span class="c-pc">${sign(c.pct)}%</span>` : ""}</div>`;
     }).join("");
