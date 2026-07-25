@@ -265,10 +265,11 @@ tr:last-child td { border-bottom: none; }
 
 /* 今日異常警示 */
 #sec-alerts { border-color: var(--warn); }
-#alerts, #highlow { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+#alerts, #highlow, #margin { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
 #alerts:has(.al-group:only-child), #alerts:not(:has(.al-group)),
-#highlow:has(.al-group:only-child), #highlow:not(:has(.al-group)) { grid-template-columns: 1fr; }
-@media (max-width: 700px) { #alerts, #highlow { grid-template-columns: 1fr; } }
+#highlow:has(.al-group:only-child), #highlow:not(:has(.al-group)),
+#margin:has(.al-group:only-child), #margin:not(:has(.al-group)) { grid-template-columns: 1fr; }
+@media (max-width: 700px) { #alerts, #highlow, #margin { grid-template-columns: 1fr; } }
 .al-glabel { font-size: .95rem; font-weight: 700; color: var(--fg); margin: 0 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border-hi); letter-spacing: .02em; }
 .alert-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .alert-row:last-child { border-bottom: 0; }
@@ -619,6 +620,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div class="sub">勾選條件取「交集」（AND）｜法人連買賣、技術狀態、量價全用寫死規則｜結果為現況篩選、非買賣建議</div>
 <div id="scr-conds"></div>
 <div id="scr-result"></div></section>
+<section id="sec-margin"><h2>融資餘額增減榜 <span class="stamp" data-stamp="margin"></span></h2>
+<div class="sub">融資＝散戶借錢買股。今日餘額 − 前日餘額（張）｜增＝散戶加碼槓桿、減＝去槓桿｜僅上市、濾餘額 ≥500 張｜點列開個股｜現況描述、非訊號</div>
+<div id="margin"></div></section>
 <section id="sec-compare"><h2>個股比較</h2>
 <div class="sub">輸入代號（空白或逗號分隔，最多 4 檔）並排比較關鍵指標｜純數據對照、非評分、非建議</div>
 <div class="cmp-in"><input id="cmp-input" placeholder="例：2330 2454 2317" autocomplete="off"><button class="scr-chip" id="cmp-clear">清除</button></div>
@@ -2176,6 +2180,24 @@ function fundLine(code) {
       <polyline class="ln" points="${pts}"/>${dots}${labels}
     </svg>`;
 })();
+(function () {   // ── 融資餘額增減榜 ──
+  const env = DATA.margin, el = document.getElementById("margin");
+  const stamp = document.querySelector('[data-stamp="margin"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">融資資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const pctSpan = p => p == null ? "" : `<span class="${cls(p)}">${(p > 0 ? "+" : "") + p}%</span>`;
+  const row = (a, dir) => `<div class="alert-row" onclick="openStock('${a.code}')">
+      <span class="al-code"><b>${a.name}</b> ${a.code}</span>
+      <span class="sub al-ind">${a.industry || ""}</span>
+      ${pctSpan(a.pct)}
+      <span class="al-tags"><span class="al-tag ${dir}">${a.chg > 0 ? "+" : ""}${a.chg.toLocaleString()} 張</span><span class="sub">餘 ${a.bal.toLocaleString()}</span></span>
+    </div>`;
+  const group = (label, list, dir) => !list || !list.length ? "" :
+    `<div class="al-group"><div class="al-glabel">${label}（${list.length}）</div>${list.map(a => row(a, dir)).join("")}</div>`;
+  el.innerHTML = (group("融資增加", env.data.inc, "up") + group("融資減少", env.data.dec, "down"))
+    || `<div class="sub">無融資增減資料。</div>`;
+})();
 (function () {   // ── 成交值週轉率榜 ──
   const env = DATA.turnover, el = document.getElementById("turnover");
   const stamp = document.querySelector('[data-stamp="turnover"]');
@@ -2469,7 +2491,7 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend", "highlow", "sentiment", "turnover")}
+             "market_trend", "highlow", "sentiment", "turnover", "margin")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]

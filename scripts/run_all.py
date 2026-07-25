@@ -8,6 +8,7 @@ from pathlib import Path
 SCRIPTS = [
     "fetch_indices.py",
     "fetch_market.py",
+    "fetch_margin.py",     # 個股融資餘額增減（TWSE MI_MARGN ALL，零 key；接在 fetch_market 後）
     "fetch_daily_all.py",
     "fetch_exrights.py",   # 除權息事件（上市補當月、上櫃累積快照）→ 還原價用
     "build_ohlc_window.py",  # 每日 append 今日 OHLC 進滾動視窗（種子須先手動 --seed）
