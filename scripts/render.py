@@ -131,6 +131,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .searchwrap { position: relative; margin-left: auto; }
 #search { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); padding: 6px 11px; font-size: .85rem; width: 172px; font-family: inherit; transition: border-color var(--tr), box-shadow var(--tr); }
 #search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* 手機窄版：此規則須在上方 #search 基礎寬(172px)之後才蓋得過（同權重後者贏）；含 ? + 🌙 兩鈕才塞得下 */
+@media (max-width: 560px) { #search { width: 116px; } }
 #search-res { position: absolute; right: 0; top: 38px; background: var(--surface); border: 1px solid var(--border-hi); border-radius: var(--r); min-width: 340px; max-width: min(420px, 92vw); max-height: 340px; overflow-y: auto; display: none; z-index: 60; box-shadow: var(--shadow); }
 .sr-item { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: .85rem; transition: background var(--tr); }
 .sr-item:hover { background: var(--accent-soft); }

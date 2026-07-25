@@ -120,6 +120,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 .searchwrap { position: relative; margin-left: auto; }
 #search { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); padding: 6px 11px; font-size: .85rem; width: 172px; font-family: inherit; transition: border-color var(--tr), box-shadow var(--tr); }
 #search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* 手機窄版：此規則須在上方 #search 基礎寬(172px)之後才蓋得過（同權重後者贏）；含 ? + 🌙 兩鈕才塞得下 */
+@media (max-width: 560px) { #search { width: 116px; } }
 #search-res { position: absolute; right: 0; top: 38px; background: var(--surface); border: 1px solid var(--border-hi); border-radius: var(--r); min-width: 340px; max-width: min(420px, 92vw); max-height: 340px; overflow-y: auto; display: none; z-index: 60; box-shadow: var(--shadow); }
 .sr-item { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: .85rem; transition: background var(--tr); }
 .sr-item:hover { background: var(--accent-soft); }
@@ -665,7 +667,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 00:37";
+const BUILT_AT = "2026-07-26 00:53";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
