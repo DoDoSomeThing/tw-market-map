@@ -298,6 +298,13 @@ tr:last-child td { border-bottom: none; }
 .rc-chip { font-size: .8rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; font-family: inherit; transition: border-color var(--tr); }
 .rc-chip:hover { border-color: var(--border-hi); }
 
+/* 使用說明 / 新手導覽 */
+.help-body { font-size: .9rem; line-height: 1.7; }
+.help-body p { margin: 10px 0; }
+.help-tabs { display: grid; gap: 7px; margin: 10px 0; }
+.help-tabs > div { border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-size: .84rem; color: var(--muted); }
+.help-tabs b { color: var(--fg); margin-right: 6px; }
+
 /* 自選股標籤/分組 */
 .wl-glabel { font-size: .74rem; font-weight: 600; color: var(--muted); margin: 8px 0 5px; padding-bottom: 3px; border-bottom: 1px solid var(--border); }
 .wl-glabel:first-child { margin-top: 0; }
@@ -508,7 +515,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <body>
 <header class="top"><div class="top-inner">
   <div class="brand"><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><rect x="0" y="0" width="12" height="9" rx="1.5" fill="#e0433f"/><rect x="13" y="0" width="7" height="9" rx="1.5" fill="#00a37a"/><rect x="0" y="10" width="7" height="10" rx="1.5" fill="#00a37a"/><rect x="8" y="10" width="12" height="10" rx="1.5" fill="#e0433f"/></svg><h1>台股產業地圖</h1><span class="sub">自用・現況呈現・不預測</span>
-    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div><button class="theme-btn" id="themeBtn" title="切換深/淺色" aria-label="切換深淺色"></button></div>
+    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div><button class="theme-btn" id="helpBtn" title="使用說明" aria-label="使用說明" onclick="showHelp()">?</button><button class="theme-btn" id="themeBtn" title="切換深/淺色" aria-label="切換深淺色"></button></div>
   <nav class="tabs" id="tabs">
     <button class="tab" data-pane="focus">每日焦點</button>
     <button class="tab" data-pane="radar">時事雷達</button>
@@ -633,7 +640,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 00:08";
+const BUILT_AT = "2026-07-26 00:11";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -736,6 +743,28 @@ function spClose() {
 }
 window.spClose = spClose;
 document.addEventListener("keydown", e => { if (e.key === "Escape") spClose(); });
+// ── 新手導覽 / 使用說明（複用 overlay；首訪自動彈一次）──
+function showHelp() {
+  const panel = document.getElementById("sp-panel");
+  panel.classList.remove("sp-wide");
+  panel.innerHTML = `<button class="sp-close" onclick="spClose()">✕</button>
+    <h3>使用說明 <span class="sub">30 秒看懂</span></h3>
+    <div class="help-body">
+      <p><b>這是什麼？</b>台股盤後數據地圖。只呈現「現況」，<b>不預測、不報明牌</b>。所有數字每交易日收盤後自動更新、規則寫死可重現。</p>
+      <div class="help-tabs">
+        <div><b>每日焦點</b>今日一句摘要、異常警示、三大法人、外資趨勢、大盤情緒曲線。</div>
+        <div><b>市場熱力</b>產業熱力圖、強弱排行、逼近 52 週高／低。</div>
+        <div><b>觀測站</b>多條件選股器、個股比較、大戶動向、名詞小百科。</div>
+        <div><b>題材／產業鏈</b>題材分類、產業上下游關係。</div>
+      </div>
+      <p><b>怎麼操作？</b>右上搜代號 → 開個股面板；點 <b>★</b> 加自選、<b>🏷</b> 分組；右上 <b>🌙</b> 切深色。</p>
+      <p class="sub">看不懂名詞？到「觀測站 → 名詞小百科」查白話解釋。所有清單皆為現況描述、非買賣建議。</p>
+    </div>`;
+  document.getElementById("sp-overlay").style.display = "block";
+  panel.style.display = "block";
+}
+window.showHelp = showHelp;
+try { if (!localStorage.getItem("twmm_seen_help")) { showHelp(); localStorage.setItem("twmm_seen_help", "1"); } } catch (e) {}
 function openStock(code) {
   const r = QUOTES[code];
   const yahoo = `https://tw.stock.yahoo.com/quote/${code}.${r && r[5] === "o" ? "TWO" : "TW"}`;
