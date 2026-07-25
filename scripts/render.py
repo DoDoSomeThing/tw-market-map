@@ -282,6 +282,16 @@ tr:last-child td { border-bottom: none; }
 .al-tag.down { color: var(--down); background: rgba(48,209,88,.12); }
 .al-tag.warn { color: var(--warn); background: rgba(255,159,10,.13); }
 
+/* 週轉率榜 */
+.tn-row { display: flex; align-items: baseline; gap: 6px 12px; padding: 7px 0; border-bottom: 1px solid var(--border); cursor: pointer; flex-wrap: wrap; }
+.tn-row:last-child { border-bottom: 0; }
+.tn-row:hover { background: var(--accent-soft); }
+.tn-rank { color: var(--muted); font-size: .8rem; min-width: 22px; }
+.tn-name { min-width: 118px; }
+.tn-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; min-width: 50px; max-width: 200px; align-self: center; }
+.tn-bar > i { display: block; height: 100%; background: var(--accent); }
+.tn-val { min-width: 52px; text-align: right; font-weight: 600; }
+
 /* 多條件選股器 */
 .scr-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 2px 0 10px; }
 .scr-chip { font-size: .82rem; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; font-family: inherit; transition: color var(--tr), border-color var(--tr), background var(--tr); }
@@ -594,6 +604,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-highlow"><h2>逼近 52 週高／低 <span class="stamp" data-stamp="highlow"></span></h2>
 <div class="sub">pos52w ≥95%（近高）／≤5%（近低）｜=100%/0% 為當日創新高/低｜依成交值排序｜點列開個股｜現況描述、非訊號</div>
 <div id="highlow"></div></section>
+<section id="sec-turnover"><h2>成交值週轉率榜 <span class="stamp" data-stamp="turnover"></span></h2>
+<div class="sub">週轉率＝當日成交值 ÷ 市值｜越高＝資金換手越熱、投機度越高｜濾成交值 ≥5000 萬｜點列開個股｜現況描述、非訊號</div>
+<div id="turnover"></div></section>
 </div>
 
 <div class="tabpane" id="pane-watch">
@@ -2135,6 +2148,24 @@ function fundLine(code) {
       <polyline class="ln" points="${pts}"/>${dots}${labels}
     </svg>`;
 })();
+(function () {   // ── 成交值週轉率榜 ──
+  const env = DATA.turnover, el = document.getElementById("turnover");
+  const stamp = document.querySelector('[data-stamp="turnover"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">週轉率資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const list = env.data.list || [];
+  if (!list.length) { el.innerHTML = `<div class="sub">無資料</div>`; return; }
+  const max = list[0].turnover || 1;
+  el.innerHTML = list.map((a, i) => `<div class="tn-row" onclick="openStock('${a.code}')">
+    <span class="tn-rank">${i + 1}</span>
+    <span class="tn-name"><b>${a.name}</b> <span class="sub">${a.code}${a.industry ? "・" + a.industry : ""}</span></span>
+    <span class="tn-bar"><i style="width:${(a.turnover / max * 100).toFixed(0)}%"></i></span>
+    <span class="tn-val">${a.turnover}%</span>
+    <span class="sub">${a.value}億</span>
+    <span class="${cls(a.pct)}">${sign(a.pct)}%</span>
+  </div>`).join("");
+})();
 (function () {   // ── 逼近 52 週高/低 ──
   const env = DATA.highlow, el = document.getElementById("highlow");
   const stamp = document.querySelector('[data-stamp="highlow"]');
@@ -2410,7 +2441,7 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend", "highlow", "sentiment")}
+             "market_trend", "highlow", "sentiment", "turnover")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
