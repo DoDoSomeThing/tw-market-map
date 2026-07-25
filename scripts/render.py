@@ -613,6 +613,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-turnover"><h2>成交值週轉率榜 <span class="stamp" data-stamp="turnover"></span></h2>
 <div class="sub">週轉率＝當日成交值 ÷ 市值｜越高＝資金換手越熱、投機度越高｜濾成交值 ≥5000 萬｜點列開個股｜現況描述、非訊號</div>
 <div id="turnover"></div></section>
+<section id="sec-daytrade"><h2>當沖比率榜 <span class="stamp" data-stamp="daytrade"></span></h2>
+<div class="sub">當沖比＝當日沖銷成交股數 ÷ 總成交股數｜越高＝隔日沖/投機資金越多｜僅上市、濾成交值 ≥5000 萬｜點列開個股｜現況描述、非訊號</div>
+<div id="daytrade"></div></section>
 </div>
 
 <div class="tabpane" id="pane-watch">
@@ -2198,6 +2201,23 @@ function fundLine(code) {
   el.innerHTML = (group("融資增加", env.data.inc, "up") + group("融資減少", env.data.dec, "down"))
     || `<div class="sub">無融資增減資料。</div>`;
 })();
+(function () {   // ── 當沖比率榜 ──
+  const env = DATA.daytrade, el = document.getElementById("daytrade");
+  const stamp = document.querySelector('[data-stamp="daytrade"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">當沖資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const list = env.data.list || [];
+  if (!list.length) { el.innerHTML = `<div class="sub">無資料</div>`; return; }
+  el.innerHTML = list.map((a, i) => `<div class="tn-row" onclick="openStock('${a.code}')">
+    <span class="tn-rank">${i + 1}</span>
+    <span class="tn-name"><b>${a.name}</b> <span class="sub">${a.code}${a.industry ? "・" + a.industry : ""}</span></span>
+    <span class="tn-bar"><i style="width:${a.ratio.toFixed(0)}%"></i></span>
+    <span class="tn-val">${a.ratio}%</span>
+    <span class="sub">${a.value}億</span>
+    <span class="${cls(a.pct)}">${sign(a.pct)}%</span>
+  </div>`).join("");
+})();
 (function () {   // ── 成交值週轉率榜 ──
   const env = DATA.turnover, el = document.getElementById("turnover");
   const stamp = document.querySelector('[data-stamp="turnover"]');
@@ -2491,7 +2511,7 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend", "highlow", "sentiment", "turnover", "margin")}
+             "market_trend", "highlow", "sentiment", "turnover", "margin", "daytrade")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
