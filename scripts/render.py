@@ -292,6 +292,16 @@ tr:last-child td { border-bottom: none; }
 .scr-card { border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; cursor: pointer; line-height: 1.5; transition: border-color var(--tr), background var(--tr); }
 .scr-card:hover { border-color: var(--border-hi); background: var(--accent-soft); }
 
+/* 個股比較 */
+.cmp-in { display: flex; gap: 8px; margin: 2px 0 10px; align-items: center; }
+#cmp-input { flex: 1; max-width: 360px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); font-family: inherit; font-size: .9rem; }
+#cmp-input:focus { outline: none; border-color: var(--accent); }
+.cmp-wrap { overflow-x: auto; }
+.cmp-table { border-collapse: collapse; min-width: 100%; }
+.cmp-table th, .cmp-table td { padding: 7px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.cmp-table th:first-child, .cmp-table td:first-child { text-align: left; color: var(--muted); position: sticky; left: 0; background: var(--surface); }
+.cmp-table thead th { font-size: .92rem; vertical-align: bottom; }
+
 /* 外資買賣超趨勢圖 */
 .trend-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 6px; }
 .trend-head b { font-size: 1.25rem; }
@@ -554,6 +564,10 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div class="sub">勾選條件取「交集」（AND）｜法人連買賣、技術狀態、量價全用寫死規則｜結果為現況篩選、非買賣建議</div>
 <div id="scr-conds"></div>
 <div id="scr-result"></div></section>
+<section id="sec-compare"><h2>個股比較</h2>
+<div class="sub">輸入代號（空白或逗號分隔，最多 4 檔）並排比較關鍵指標｜純數據對照、非評分、非建議</div>
+<div class="cmp-in"><input id="cmp-input" placeholder="例：2330 2454 2317" autocomplete="off"><button class="scr-chip" id="cmp-clear">清除</button></div>
+<div id="cmp-result"></div></section>
 <section id="sec-tdcc"><h2>大戶動向（週） <span class="stamp" data-stamp="tdcc"></span></h2><div class="sub">TDCC 集保股權分散｜大戶=400 張以上持股比（千張=1,000 張以上）｜每週五結算、週六公布</div><div id="tdcc"></div></section>
 <section id="sec-mops"><h2>重大訊息 <span class="stamp" data-stamp="mops"></span></h2><div class="sub">MOPS 公開資訊觀測站（上市+上櫃）｜標籤為主旨關鍵字自動分類</div><div id="mops"></div></section>
 </div>
@@ -2039,6 +2053,43 @@ function fundLine(code) {
     refresh();
   }));
   refresh();
+})();
+(function () {   // ── 個股比較（純 DATA 欄位並排，即時）──
+  const inp = document.getElementById("cmp-input");
+  const res = document.getElementById("cmp-result");
+  const clr = document.getElementById("cmp-clear");
+  if (!inp || !res) return;
+  const F = () => DATA.fundamentals.ok ? DATA.fundamentals.data.stocks : {};
+  const V = () => DATA.valuation.ok ? DATA.valuation.data.stocks : {};
+  const RV = () => DATA.revenue_hl.ok ? (DATA.revenue_hl.data.stocks || {}) : {};
+  const TD = () => DATA.tdcc.ok ? (DATA.tdcc.data.by_code || {}) : {};
+  const capTxt = v => v == null ? "—" : (v >= 10000 ? (v / 10000).toFixed(2) + " 兆" : v.toLocaleString() + " 億");
+  const ROWS = [
+    ["收盤", c => `<span class="${cls(QUOTES[c][4])}">${QUOTES[c][3]}</span>`],
+    ["漲跌%", c => `<span class="${cls(QUOTES[c][4])}">${sign(QUOTES[c][4])}%</span>`],
+    ["成交值(億)", c => QUOTES[c][6] ?? "—"],
+    ["外資(張)", c => lotsCell(QUOTES[c][7], QUOTES[c][9])],
+    ["投信(張)", c => lotsCell(QUOTES[c][8], QUOTES[c][10])],
+    ["本益比 PE", c => (V()[c] || {}).pe ?? "—"],
+    ["淨值比 PB", c => (V()[c] || {}).pb ?? "—"],
+    ["市值", c => capTxt((V()[c] || {}).cap)],
+    ["EPS", c => (F()[c] || {}).eps ?? "—"],
+    ["毛利率", c => { const g = (F()[c] || {}).gm; return g == null ? "—" : g + "%"; }],
+    ["殖利率", c => { const y = (V()[c] || {}).yield_ex ?? (F()[c] || {}).yield_pct; return y == null ? "—" : y + "%"; }],
+    ["營收 YoY", c => { const r = RV()[c]; return r && r[1] != null ? `<span class="${cls(r[1])}">${r[1] > 0 ? "+" : ""}${r[1]}%</span>` : "—"; }],
+    ["大戶 400張+", c => { const b = TD()[c]; return b ? b[0] + "%" : "—"; }],
+  ];
+  function render() {
+    const codes = (inp.value.match(/\d{4}/g) || []).filter(c => QUOTES[c]);
+    const uniq = [...new Set(codes)].slice(0, 4);
+    if (!uniq.length) { res.innerHTML = `<div class="scr-count">輸入至少一檔有效代號（4 位數字）。</div>`; return; }
+    const head = uniq.map(c => `<th><b>${QUOTES[c][1]}</b><br><span class="sub">${c}${QUOTES[c][2] ? "・" + QUOTES[c][2] : ""}</span></th>`).join("");
+    const body = ROWS.map(([lbl, fn]) => `<tr><td>${lbl}</td>${uniq.map(c => `<td>${fn(c)}</td>`).join("")}</tr>`).join("");
+    res.innerHTML = `<div class="cmp-wrap"><table class="cmp-table"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  inp.addEventListener("input", render);
+  clr.addEventListener("click", () => { inp.value = ""; render(); inp.focus(); });
+  render();
 })();
 (function () {
   const env = DATA.breadth, el = document.getElementById("breadth");
