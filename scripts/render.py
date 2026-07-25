@@ -605,7 +605,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div class="tabpane" id="pane-market">
 <section id="sec-heatmap"><h2>產業熱力圖 <span class="stamp" data-stamp="heatmap"></span>
   <span style="float:right"><span class="hm-mode"><button class="hm-mb on" data-mode="pct">依漲跌</button><button class="hm-mb" data-mode="foreign">依外資</button></span> <select id="lookback"></select></span></h2>
-  <div class="sub">格子大小=成交值｜顏色<span id="hm-legend">=漲跌%（紅漲綠跌）</span>｜各產業取成交值前 25 檔<span id="lookback-note"></span></div><div id="heatmap"></div></section>
+  <div class="sub">格子大小=成交值｜顏色<span id="hm-legend">=漲跌%（紅漲綠跌）</span>｜各產業取成交值前 18 檔<span id="lookback-note"></span></div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
 <section id="sec-highlow"><h2>逼近 52 週高／低 <span class="stamp" data-stamp="highlow"></span></h2>
 <div class="sub">pos52w ≥95%（近高）／≤5%（近低）｜=100%/0% 為當日創新高/低｜依成交值排序｜點列開個股｜現況描述、非訊號</div>

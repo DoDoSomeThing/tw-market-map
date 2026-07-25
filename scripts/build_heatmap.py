@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from tw_common import read_json, write_error, write_json
 
-MAX_STOCKS_PER_INDUSTRY = 25   # 每產業最多呈現檔數（其餘併入產業統計但不畫格）
+MAX_STOCKS_PER_INDUSTRY = 18   # 每產業最多呈現檔數（其餘併入產業統計但不畫格）；18=格子夠大、名稱讀得到
 MIN_TRADE_VALUE = 30_000_000   # 個股低於 3 千萬成交值不畫格（避免殭屍股塞版面）
 
 
