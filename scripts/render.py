@@ -265,9 +265,10 @@ tr:last-child td { border-bottom: none; }
 
 /* 今日異常警示 */
 #sec-alerts { border-color: var(--warn); }
-#alerts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
-#alerts:has(.al-group:only-child), #alerts:not(:has(.al-group)) { grid-template-columns: 1fr; }
-@media (max-width: 700px) { #alerts { grid-template-columns: 1fr; } }
+#alerts, #highlow { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+#alerts:has(.al-group:only-child), #alerts:not(:has(.al-group)),
+#highlow:has(.al-group:only-child), #highlow:not(:has(.al-group)) { grid-template-columns: 1fr; }
+@media (max-width: 700px) { #alerts, #highlow { grid-template-columns: 1fr; } }
 .al-glabel { font-size: .95rem; font-weight: 700; color: var(--fg); margin: 0 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border-hi); letter-spacing: .02em; }
 .alert-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .alert-row:last-child { border-bottom: 0; }
@@ -533,6 +534,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
   <span style="float:right"><select id="lookback"></select></span></h2>
   <div class="sub">格子大小=成交值｜顏色=漲跌%（紅漲綠跌）｜各產業取成交值前 25 檔<span id="lookback-note"></span></div><div id="heatmap"></div></section>
 <section id="sec-rank"><h2>強勢/弱勢排行 <span class="stamp" data-stamp="rank"></span></h2><div id="ranks"></div></section>
+<section id="sec-highlow"><h2>逼近 52 週高／低 <span class="stamp" data-stamp="highlow"></span></h2>
+<div class="sub">pos52w ≥95%（近高）／≤5%（近低）｜=100%/0% 為當日創新高/低｜依成交值排序｜點列開個股｜現況描述、非訊號</div>
+<div id="highlow"></div></section>
 </div>
 
 <div class="tabpane" id="pane-watch">
@@ -1951,6 +1955,24 @@ function fundLine(code) {
       ${bars}${labels}
     </svg>`;
 })();
+(function () {   // ── 逼近 52 週高/低 ──
+  const env = DATA.highlow, el = document.getElementById("highlow");
+  const stamp = document.querySelector('[data-stamp="highlow"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">高低點資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const pctSpan = p => p == null ? "" : `<span class="${cls(p)}">${(p > 0 ? "+" : "") + p}%</span>`;
+  const row = (a, dir) => `<div class="alert-row" onclick="openStock('${a.code}')">
+      <span class="al-code"><b>${a.name}</b> ${a.code}</span>
+      <span class="sub al-ind">${a.industry || ""}</span>
+      ${pctSpan(a.pct)}
+      <span class="al-tags"><span class="al-tag ${dir}">位階 ${a.pos}%</span></span>
+    </div>`;
+  const group = (label, list, dir) => !list || !list.length ? "" :
+    `<div class="al-group"><div class="al-glabel">${label}（${list.length}）</div>${list.map(a => row(a, dir)).join("")}</div>`;
+  el.innerHTML = (group("逼近 52 週高", env.data.high, "up") + group("逼近 52 週低", env.data.low, "down"))
+    || `<div class="sub">今日無逼近高低點個股。</div>`;
+})();
 (function () {
   const env = DATA.breadth, el = document.getElementById("breadth");
   document.querySelector('[data-stamp="breadth"]').innerHTML = stampFor(env);
@@ -2118,7 +2140,7 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend")}
+             "market_trend", "highlow")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
