@@ -24,7 +24,7 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>document.documentElement.dataset.theme="light";</script><!-- 2026-07-19 移除深色模式：固定淺色。dark CSS 保留未觸發，要復原改回 localStorage 切換版 -->
+<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"light");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
    Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
@@ -118,7 +118,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
 /* 寬表格留整列：實測併成半寬(580px)後內容換行，高度反而多兩倍
    (營收亮點 541→1266、資金流 1014→1959、個股動向 1269→2589)。 */
 #pane-focus > #sec-revhl, #pane-focus > #sec-market,
-#pane-focus > #sec-flow,  #pane-focus > #sec-inst { grid-column: span 12; }
+#pane-focus > #sec-flow,  #pane-focus > #sec-inst,
+#pane-focus > #sec-trend { grid-column: span 12; }
 @media (max-width: 980px) {   /* 窄螢幕塌回單欄 */
   #pane-focus.active { display: block; }
   #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
@@ -279,6 +280,13 @@ tr:last-child td { border-bottom: none; }
 .al-tag.up { color: var(--up); background: rgba(255,69,58,.12); }
 .al-tag.down { color: var(--down); background: rgba(48,209,88,.12); }
 .al-tag.warn { color: var(--warn); background: rgba(255,159,10,.13); }
+
+/* 外資買賣超趨勢圖 */
+.trend-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 6px; }
+.trend-head b { font-size: 1.25rem; }
+.trend-svg { width: 100%; height: 156px; display: block; }
+.trend-svg text { fill: var(--muted); font-size: 10px; }
+.trend-svg .zero { stroke: var(--border-hi); stroke-width: 1; }
 
 /* 熱力圖 */
 #heatmap { width: 100%; }
@@ -463,7 +471,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <body>
 <header class="top"><div class="top-inner">
   <div class="brand"><svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><rect x="0" y="0" width="12" height="9" rx="1.5" fill="#e0433f"/><rect x="13" y="0" width="7" height="9" rx="1.5" fill="#00a37a"/><rect x="0" y="10" width="7" height="10" rx="1.5" fill="#00a37a"/><rect x="8" y="10" width="12" height="10" rx="1.5" fill="#e0433f"/></svg><h1>台股產業地圖</h1><span class="sub">自用・現況呈現・不預測</span>
-    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div></div>
+    <div class="searchwrap"><input id="search" placeholder="搜代號/股名…" autocomplete="off"><div id="search-res"></div></div><button class="theme-btn" id="themeBtn" title="切換深/淺色" aria-label="切換深淺色"></button></div>
   <nav class="tabs" id="tabs">
     <button class="tab" data-pane="focus">每日焦點</button>
     <button class="tab" data-pane="radar">時事雷達</button>
@@ -494,6 +502,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-revhl"><h2>營收亮點 <span class="stamp" data-stamp="revenue_hl"></span></h2><div class="sub" id="revhl-sub"></div><div id="revhl"></div></section>
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
+<section id="sec-trend"><h2>外資近日買賣超趨勢 <span class="stamp" data-stamp="trend"></span></h2>
+<div class="sub">近 14 交易日外資單日淨買賣（億）｜紅=買超、綠=賣超｜現況描述、非訊號</div>
+<div id="trend"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
 </div>
@@ -1907,6 +1918,39 @@ function fundLine(code) {
   const html = group("法人爆買賣", env.data.inst) + group("爆量", env.data.vol);
   el.innerHTML = html || `<div class="sub">今日無明顯異常。</div>`;
 })();
+(function () {   // ── 外資買賣超趨勢（14 日分歧長條，手刻 SVG 無依賴）──
+  const env = DATA.market_trend, el = document.getElementById("trend");
+  const stamp = document.querySelector('[data-stamp="trend"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">趨勢資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const s = (env.data.series || []).slice(-14);
+  if (!s.length) { el.innerHTML = `<div class="sub">無趨勢資料</div>`; return; }
+  const W = 720, H = 156, padT = 16, padB = 22;
+  const plotH = H - padT - padB, zeroY = padT + plotH / 2;
+  const maxAbs = Math.max(...s.map(d => Math.abs(d.foreign)), 1);
+  const sc = (plotH / 2) / maxAbs, n = s.length, bw = W / n;
+  const bars = s.map((d, i) => {
+    const x = i * bw + bw * 0.18, w = bw * 0.64, h = Math.abs(d.foreign) * sc;
+    const y = d.foreign >= 0 ? zeroY - h : zeroY;
+    const color = d.foreign >= 0 ? "var(--up)" : "var(--down)";
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" fill="${color}" rx="1.5"><title>${d.date}　外資 ${d.foreign > 0 ? "+" : ""}${d.foreign} 億</title></rect>`;
+  }).join("");
+  const lbl = (i) => `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${H - 7}" text-anchor="middle">${s[i].date.slice(5)}</text>`;
+  const labels = [0, Math.floor(n / 2), n - 1].map(lbl).join("");
+  const fSum = s.reduce((a, d) => a + d.foreign, 0);
+  const tSum = s.reduce((a, d) => a + (d.trust || 0), 0);
+  const last = s[s.length - 1];
+  const w = v => `<b class="${cls(v)}">${v > 0 ? "+" : ""}${Math.round(v)}</b>`;
+  el.innerHTML = `<div class="trend-head">
+      <span>最新外資 ${w(last.foreign)} 億</span>
+      <span class="sub">近 ${n} 日累計：外資 ${w(fSum)} 億・投信 ${w(tSum)} 億</span>
+    </div>
+    <svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
+      <line class="zero" x1="0" y1="${zeroY}" x2="${W}" y2="${zeroY}"/>
+      ${bars}${labels}
+    </svg>`;
+})();
 (function () {
   const env = DATA.breadth, el = document.getElementById("breadth");
   document.querySelector('[data-stamp="breadth"]').innerHTML = stampFor(env);
@@ -2016,6 +2060,7 @@ function fundLine(code) {
     document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "pane-" + id));
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.pane === id));
     if (push) history.replaceState(null, "", location.pathname + location.search + "#tab=" + id);
+    try { localStorage.setItem("tab", id); } catch (e) {}   // 分頁記憶
     document.querySelectorAll(".flowsub").forEach(x => x.style.display = "none");   // 切頁收合資金流展開
     window.scrollTo(0, 0);
     // 焦點頁藏著時量不到尺寸（全 0）→ 一顯示回來就重算左卡高度
@@ -2026,7 +2071,8 @@ function fundLine(code) {
     t.addEventListener("click", () => show(t.dataset.pane, true)));
   const q = new URLSearchParams(location.search);
   const hashTab = (location.hash.match(/tab=([a-z]+)/) || [])[1];
-  show(hashTab || (q.get("chain") ? "chains" : q.get("topic") ? "topics" : "focus"), false);
+  let savedTab = null; try { savedTab = localStorage.getItem("tab"); } catch (e) {}
+  show(hashTab || (q.get("chain") ? "chains" : q.get("topic") ? "topics" : (savedTab || "focus")), false);
 })();
 
 // 熱力圖格子 → 個股面板（事件委派，含日期回看重繪後的格子）
@@ -2035,8 +2081,24 @@ document.addEventListener("click", e => {
   if (hc) openStock(hc.dataset.code);
 });
 
-// 深淺色切換已移除（2026-07-19,固定淺色）；meta theme-color 直接設淺色。
-document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f2f5fa");
+// ── 深淺色切換（localStorage 記憶，同步 meta theme-color）──
+(function () {
+  const btn = document.getElementById("themeBtn");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const MOON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  const SUN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
+  function apply(t) {
+    document.documentElement.dataset.theme = t;
+    if (meta) meta.setAttribute("content", t === "light" ? "#f2f5fa" : "#05070d");
+    if (btn) btn.innerHTML = t === "light" ? MOON : SUN;   // 顯示「切過去」的圖示
+  }
+  apply(document.documentElement.dataset.theme || "light");
+  if (btn) btn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    apply(next);
+  });
+})();
 
 // PWA service worker（GitHub Pages 為 https；本機測試 http 不註冊）
 if ("serviceWorker" in navigator && location.protocol === "https:")
@@ -2055,7 +2117,8 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts")}
+             "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
+             "market_trend")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
