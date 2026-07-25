@@ -302,6 +302,13 @@ tr:last-child td { border-bottom: none; }
 .cmp-table th:first-child, .cmp-table td:first-child { text-align: left; color: var(--muted); position: sticky; left: 0; background: var(--surface); }
 .cmp-table thead th { font-size: .92rem; vertical-align: bottom; }
 
+/* 最近查看 */
+#recent:not(:empty) { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.rc-hd { font-size: .72rem; color: var(--muted); margin-bottom: 6px; letter-spacing: .03em; }
+.rc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rc-chip { font-size: .8rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; font-family: inherit; transition: border-color var(--tr); }
+.rc-chip:hover { border-color: var(--border-hi); }
+
 /* 外資買賣超趨勢圖 */
 .trend-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 6px; }
 .trend-head b { font-size: 1.25rem; }
@@ -517,7 +524,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <div class="sub">今天 vs 昨天的變化，規則寫死可驗證：法人連買賣 ≥3 日翻向｜新聞點名 ≥2 則｜澄清/重大公告｜營收新公布｜題材聲量 ≥昨日 2 倍｜現況描述，非訊號</div>
 <div id="changes"></div></section>
 <div class="bento-col" id="bento-side">
-  <section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div></section>
+  <section id="sec-mywatch"><h2>自選股 <span class="sub" id="wl-hint"></span></h2><div id="watchlist"></div><div id="recent"></div></section>
   <section id="sec-breadth"><h2>市場寬度 <span class="stamp" data-stamp="breadth"></span></h2><div id="breadth"></div></section>
 </div>
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
@@ -701,6 +708,7 @@ function openStock(code) {
   const r = QUOTES[code];
   const yahoo = `https://tw.stock.yahoo.com/quote/${code}.${r && r[5] === "o" ? "TWO" : "TW"}`;
   if (!r) { window.open(yahoo, "_blank"); return; }
+  if (typeof rcPush === "function") rcPush(code);   // 記錄最近查看
   const f = DATA.fundamentals.ok ? (DATA.fundamentals.data.stocks[code] || {}) : {};
   const rv = DATA.revenue_hl.ok ? (DATA.revenue_hl.data.stocks || {})[code] : null;
   const dv = DATA.dividend.ok ? (DATA.dividend.data.by_code || {})[code] : null;
@@ -953,6 +961,27 @@ function renderWatchlist() {
   }));
 }
 renderWatchlist();
+
+// ── 最近查看（localStorage，最多 12 檔，openStock 時記錄）──
+const RC_KEY = "twmm_recent";
+function rcGet() { try { return JSON.parse(localStorage.getItem(RC_KEY) || "[]"); } catch (e) { return []; } }
+function rcPush(code) {
+  if (!QUOTES[code]) return;
+  let a = rcGet().filter(c => c !== code);
+  a.unshift(code);
+  try { localStorage.setItem(RC_KEY, JSON.stringify(a.slice(0, 12))); } catch (e) {}
+  renderRecent();
+}
+function renderRecent() {
+  const el = document.getElementById("recent");
+  if (!el) return;
+  const codes = rcGet().filter(c => QUOTES[c]);
+  if (!codes.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="rc-hd">最近查看</div><div class="rc-chips">`
+    + codes.map(c => `<button class="rc-chip" onclick="openStock('${c}')">${QUOTES[c][1]} <span class="${cls(QUOTES[c][4])}">${sign(QUOTES[c][4])}%</span></button>`).join("")
+    + `</div>`;
+}
+renderRecent();
 
 // ── 大戶級距×期間（tdcc_view.json lazy fetch；大戶動向區、個股面板、今日異動三處共用）──
 // 必須宣告在 renderChanges() 的「呼叫點」之前——let 有 TDZ,擺後面會在首次 render 時 ReferenceError。
