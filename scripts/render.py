@@ -19,9 +19,11 @@ TEMPLATE = """<!DOCTYPE html>
 <title>台股產業地圖</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#05070d">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
 <script>document.documentElement.dataset.theme="light";</script><!-- 2026-07-19 移除深色模式：固定淺色。dark CSS 保留未觸發，要復原改回 localStorage 切換版 -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
@@ -107,6 +109,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
    曾試過 stretch 撐滿左卡高度 → 卡是齊了，但卡內多出 70px 空白底，比空洞更醜。
    改由 syncChangesHeight() 反過來讓左卡（今日異動）去配合右欄高度。 */
 #pane-focus > .bento-col { display: grid; gap: var(--gap); align-content: start; }
+#pane-focus > #sec-summary { grid-column: span 12; }
+#pane-focus > #sec-alerts { grid-column: span 12; }
 #pane-focus > #sec-changes { grid-column: span 8; }
 #pane-focus > #bento-side  { grid-column: span 4; }
 /* 國際指數不放右欄：381px 窄欄會把它從 299 撐到 554（卡片式排版塞不下就換行）→ 整條右欄暴增到 1017。 */
@@ -249,6 +253,32 @@ th[data-dir="asc"]::after { content: " ▴"; color: var(--accent); }
 tr:nth-child(even) td { background: transparent; }   /* 斑馬紋拿掉：卡片＋分隔線已足夠，斑馬紋讓畫面更吵 */
 tr:hover td { background: var(--accent-soft); }
 tr:last-child td { border-bottom: none; }
+
+/* 今日一句摘要 */
+#sec-summary { border-color: var(--border-hi); }
+.summary-list { margin: 0; padding: 0; list-style: none; }
+.summary-list li { padding: 7px 0 7px 16px; position: relative; line-height: 1.6; border-bottom: 1px solid var(--border); }
+.summary-list li::before { content: "›"; position: absolute; left: 2px; color: var(--accent); font-weight: 700; }
+.summary-list li:last-child { border-bottom: 0; padding-left: 0; color: var(--muted); font-size: .82rem; }
+.summary-list li:last-child::before { content: ""; }
+
+/* 今日異常警示 */
+#sec-alerts { border-color: var(--warn); }
+#alerts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+#alerts:has(.al-group:only-child), #alerts:not(:has(.al-group)) { grid-template-columns: 1fr; }
+@media (max-width: 700px) { #alerts { grid-template-columns: 1fr; } }
+.al-glabel { font-size: .95rem; font-weight: 700; color: var(--fg); margin: 0 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border-hi); letter-spacing: .02em; }
+.alert-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.alert-row:last-child { border-bottom: 0; }
+.alert-row:hover { background: var(--accent-soft); }
+.al-code { min-width: 92px; }
+.al-code b { font-weight: 600; }
+.al-ind { font-size: .74rem; }
+.al-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+.al-tag { font-size: .72rem; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.al-tag.up { color: var(--up); background: rgba(255,69,58,.12); }
+.al-tag.down { color: var(--down); background: rgba(48,209,88,.12); }
+.al-tag.warn { color: var(--warn); background: rgba(255,159,10,.13); }
 
 /* 熱力圖 */
 #heatmap { width: 100%; }
@@ -448,6 +478,12 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <main>
 
 <div class="tabpane" id="pane-focus">
+<section id="sec-summary"><h2>今日一句 <span class="stamp" data-stamp="summary"></span></h2>
+<div class="sub">收盤數據規則彙整成人話｜現況直述、非預測、非買賣訊號</div>
+<div id="summary"></div></section>
+<section id="sec-alerts"><h2>今日異常 ⚠️ <span class="stamp" data-stamp="alerts"></span></h2>
+<div class="sub">規則自動偵測極端值：外資買賣超 ≥30億｜投信 ≥10億｜爆量 ≥3倍均量｜點列可看個股｜現況描述、非訊號</div>
+<div id="alerts"></div></section>
 <section id="sec-changes"><h2>今日異動 <span class="stamp" data-stamp="changes"></span></h2>
 <div class="sub">今天 vs 昨天的變化，規則寫死可驗證：法人連買賣 ≥3 日翻向｜新聞點名 ≥2 則｜澄清/重大公告｜營收新公布｜題材聲量 ≥昨日 2 倍｜現況描述，非訊號</div>
 <div id="changes"></div></section>
@@ -1845,6 +1881,33 @@ function fundLine(code) {
 
 // ── 市場寬度 ──
 (function () {
+  const env = DATA.summary, el = document.getElementById("summary");
+  const stamp = document.querySelector('[data-stamp="summary"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (el) {
+    if (!env || !env.ok) { el.innerHTML = `<div class="err">摘要資料失敗：${(env && env.error) || ""}</div>`; }
+    else { el.innerHTML = `<ul class="summary-list">${(env.data.lines || []).map(t => `<li>${t}</li>`).join("")}</ul>`; }
+  }
+})();
+(function () {   // ── 今日異常警示 ──
+  const env = DATA.alerts, el = document.getElementById("alerts");
+  const stamp = document.querySelector('[data-stamp="alerts"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">異常偵測資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const pctSpan = p => p == null ? "" : `<span class="${cls(p)}">${(p > 0 ? "+" : "") + p}%</span>`;
+  const row = a => `<div class="alert-row" onclick="openStock('${a.code}')">
+    <span class="al-code"><b>${a.name}</b> ${a.code}</span>
+    <span class="sub al-ind">${a.industry || ""}</span>
+    ${pctSpan(a.pct)}
+    <span class="al-tags">${a.tags.map(t => `<span class="al-tag ${t.dir}">${t.t}</span>`).join("")}</span>
+  </div>`;
+  const group = (label, list) => !list || !list.length ? "" :
+    `<div class="al-group"><div class="al-glabel">${label}（${list.length}）</div>${list.map(row).join("")}</div>`;
+  const html = group("法人爆買賣", env.data.inst) + group("爆量", env.data.vol);
+  el.innerHTML = html || `<div class="sub">今日無明顯異常。</div>`;
+})();
+(function () {
   const env = DATA.breadth, el = document.getElementById("breadth");
   document.querySelector('[data-stamp="breadth"]').innerHTML = stampFor(env);
   if (!env.ok) { el.innerHTML = `<div class="err">市場寬度資料失敗：${env.error || ""}</div>`; return; }
@@ -1979,7 +2042,7 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f2f
 if ("serviceWorker" in navigator && location.protocol === "https:")
   navigator.serviceWorker.register("sw.js");
 
-document.getElementById("built-at").textContent = "頁面產生時間 " + BUILT_AT;
+{ const _b = document.getElementById("built-at"); if (_b) _b.textContent = "頁面產生時間 " + BUILT_AT; }
 </script>
 </body>
 </html>
@@ -1992,7 +2055,7 @@ def main() -> None:
     data = {name: read_json(name) for name in
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
-             "news_radar", "topic_discover", "changes", "dividend", "valuation")}
+             "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
