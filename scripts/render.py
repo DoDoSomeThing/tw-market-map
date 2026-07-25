@@ -1578,6 +1578,17 @@ function drawHeatmap(groups) {
   if (!env.ok) { document.getElementById("heatmap").innerHTML = `<div class="err">熱力圖資料失敗：${env.error || ""}</div>`; return; }
   drawHeatmap(env.data.groups);
 })();
+// 熱力圖在隱藏分頁繪製時量不到正確寬度（clientWidth=0→退回 body 寬）→ 格子畫太寬、顯示時右側被裁。
+// 用 ResizeObserver：容器寬度變化（分頁顯示 0→實寬、視窗縮放）時以正確寬度重繪。
+(function () {
+  const el = document.getElementById("heatmap");
+  if (!el || !window.ResizeObserver) return;
+  let lastW = 0;
+  new ResizeObserver(() => {
+    const w = el.clientWidth;
+    if (w && Math.abs(w - lastW) > 2 && hmLastGroups) { lastW = w; drawHeatmap(hmLastGroups); }
+  }).observe(el);
+})();
 // 熱力圖上色模式切換（依漲跌 / 依外資買賣超；外資恆用今日 QUOTES）
 (function () {
   const btns = document.querySelectorAll(".hm-mb");

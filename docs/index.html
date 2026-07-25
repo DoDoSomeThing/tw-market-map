@@ -665,7 +665,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 00:30";
+const BUILT_AT = "2026-07-26 00:35";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -1566,6 +1566,17 @@ function drawHeatmap(groups) {
   document.querySelector('[data-stamp="heatmap"]').innerHTML = stampFor(env);
   if (!env.ok) { document.getElementById("heatmap").innerHTML = `<div class="err">熱力圖資料失敗：${env.error || ""}</div>`; return; }
   drawHeatmap(env.data.groups);
+})();
+// 熱力圖在隱藏分頁繪製時量不到正確寬度（clientWidth=0→退回 body 寬）→ 格子畫太寬、顯示時右側被裁。
+// 用 ResizeObserver：容器寬度變化（分頁顯示 0→實寬、視窗縮放）時以正確寬度重繪。
+(function () {
+  const el = document.getElementById("heatmap");
+  if (!el || !window.ResizeObserver) return;
+  let lastW = 0;
+  new ResizeObserver(() => {
+    const w = el.clientWidth;
+    if (w && Math.abs(w - lastW) > 2 && hmLastGroups) { lastW = w; drawHeatmap(hmLastGroups); }
+  }).observe(el);
 })();
 // 熱力圖上色模式切換（依漲跌 / 依外資買賣超；外資恆用今日 QUOTES）
 (function () {
