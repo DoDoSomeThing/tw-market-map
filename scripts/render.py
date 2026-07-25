@@ -615,6 +615,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-turnover"><h2>成交值週轉率榜 <span class="stamp" data-stamp="turnover"></span></h2>
 <div class="sub">週轉率＝當日成交值 ÷ 市值｜越高＝資金換手越熱、投機度越高｜濾成交值 ≥5000 萬｜點列開個股｜現況描述、非訊號</div>
 <div id="turnover"></div></section>
+<section id="sec-dttrend"><h2>大盤當沖比趨勢 <span class="stamp" data-stamp="daytrade_trend"></span></h2>
+<div class="sub">全市場當沖成交股數 ÷ 大盤總成交股數（%）｜升＝隔日沖/投機資金升溫｜現況描述、非訊號</div>
+<div id="dttrend"></div></section>
 <section id="sec-daytrade"><h2>當沖比率榜 <span class="stamp" data-stamp="daytrade"></span></h2>
 <div class="sub">當沖比＝當日沖銷成交股數 ÷ 總成交股數｜越高＝隔日沖/投機資金越多｜僅上市、濾成交值 ≥5000 萬｜點列開個股｜現況描述、非訊號</div>
 <div id="daytrade"></div></section>
@@ -2244,6 +2247,33 @@ function fundLine(code) {
   el.innerHTML = (group("融資增加", env.data.inc, "up") + group("融資減少", env.data.dec, "down"))
     || `<div class="sub">無融資增減資料。</div>`;
 })();
+(function () {   // ── 大盤當沖比趨勢（折線）──
+  const env = DATA.daytrade_trend, el = document.getElementById("dttrend");
+  const stamp = document.querySelector('[data-stamp="daytrade_trend"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">當沖趨勢資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const s = (env.data.series || []).slice(-30);
+  if (s.length < 2) { el.innerHTML = `<div class="sub">當沖比歷史不足</div>`; return; }
+  const W = 720, H = 156, padT = 16, padB = 22, padL = 34, padR = 8;
+  const plotH = H - padT - padB, plotW = W - padL - padR, n = s.length;
+  const vals = s.map(d => d.ratio);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.15 || 1; lo -= pad; hi += pad;
+  const X = i => padL + (n === 1 ? plotW / 2 : i * plotW / (n - 1));
+  const Y = v => padT + (hi - v) / (hi - lo) * plotH;
+  const pts = s.map((d, i) => `${X(i).toFixed(1)},${Y(d.ratio).toFixed(1)}`).join(" ");
+  const dots = s.map((d, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(d.ratio).toFixed(1)}" r="2.4" fill="var(--accent)"><title>${d.date}　當沖比 ${d.ratio}%</title></circle>`).join("");
+  const labels = [0, Math.floor(n / 2), n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${s[i].date.slice(5)}</text>`).join("");
+  const last = s[s.length - 1], avg = vals.reduce((a, b) => a + b, 0) / n;
+  el.innerHTML = `<div class="trend-head">
+      <span>最新當沖比 <b>${last.ratio}%</b></span>
+      <span class="sub">近 ${n} 日均 ${avg.toFixed(1)}%</span>
+    </div>
+    <svg class="sent-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
+      <text x="2" y="${(Y(hi) + 9).toFixed(0)}">${Math.round(hi)}%</text><text x="2" y="${Y(lo).toFixed(0)}">${Math.round(lo)}%</text>
+      <polyline class="ln" points="${pts}"/>${dots}${labels}
+    </svg>`;
+})();
 (function () {   // ── 當沖比率榜 ──
   const env = DATA.daytrade, el = document.getElementById("daytrade");
   const stamp = document.querySelector('[data-stamp="daytrade"]');
@@ -2554,7 +2584,8 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend", "highlow", "sentiment", "turnover", "margin", "daytrade")}
+             "market_trend", "highlow", "sentiment", "turnover", "margin", "daytrade",
+             "daytrade_trend")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]

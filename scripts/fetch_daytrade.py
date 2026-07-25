@@ -3,8 +3,8 @@
 # 僅上市（TPEx 為另一端點，暫不含）→ data/daytrade.json。
 from __future__ import annotations
 
-from tw_common import (http_get_json, parse_num, read_json, tw_today,
-                       write_error, write_json, ymd_to_iso)
+from tw_common import (http_get_json, parse_num, read_json, roc_to_iso,
+                       tw_today, write_error, write_json, ymd_to_iso)
 
 TWTB4U_URL = "https://www.twse.com.tw/exchangeReport/TWTB4U?date={d}&response=json&selectType=All"
 TOP = 30
@@ -58,9 +58,44 @@ def main() -> None:
         return
 
     rows.sort(key=lambda x: x["ratio"], reverse=True)
+    date_iso = ymd_to_iso(str(j.get("date"))) or daily.get("data_date")
     write_json("daytrade", {"list": rows[:TOP], "min_value": MIN_VALUE},
-               data_date=ymd_to_iso(str(j.get("date"))) or daily.get("data_date"),
-               source="TWSE TWTB4U（當日沖銷交易，上市）")
+               data_date=date_iso, source="TWSE TWTB4U（當日沖銷交易，上市）")
+
+    # 追加今日大盤當沖比進趨勢序列（歷史由 backfill_daytrade.py 種；此處每日 upsert 今天）
+    _update_trend(j, date_iso)
+
+
+def _update_trend(twtb_json: dict, date_iso: str | None) -> None:
+    """大盤當沖比 = 全市場當沖成交股數 ÷ 大盤總成交股數（FMTQIK）；upsert 進 daytrade_trend.json。"""
+    if not date_iso:
+        return
+    dt_total = 0.0
+    for t in twtb_json.get("tables", []):
+        if (t.get("fields") or [""])[0] != "證券代號":
+            continue
+        for row in t.get("data", []):
+            v = parse_num(row[3])
+            if v:
+                dt_total += v
+    ym = date_iso.replace("-", "")[:6]
+    f = http_get_json(f"https://www.twse.com.tw/exchangeReport/FMTQIK?date={ym}01&response=json", timeout=40)
+    mkt = None
+    if f and f.get("stat") == "OK":
+        for r in f.get("data", []):
+            if roc_to_iso(r[0]) == date_iso:
+                mkt = parse_num(r[1])
+                break
+    if not dt_total or not mkt:
+        return
+    ratio = round(dt_total / mkt * 100, 1)
+    prev = read_json("daytrade_trend")
+    series = prev["data"].get("series", []) if prev.get("ok") else []
+    series = [x for x in series if x.get("date") != date_iso]
+    series.append({"date": date_iso, "ratio": ratio})
+    series.sort(key=lambda x: x["date"])
+    write_json("daytrade_trend", {"series": series[-120:]},
+               data_date=date_iso, source="TWSE TWTB4U ÷ FMTQIK（大盤當沖比）")
 
 
 if __name__ == "__main__":
