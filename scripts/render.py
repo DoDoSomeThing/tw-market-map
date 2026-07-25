@@ -309,6 +309,12 @@ tr:last-child td { border-bottom: none; }
 .rc-chip { font-size: .8rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; font-family: inherit; transition: border-color var(--tr); }
 .rc-chip:hover { border-color: var(--border-hi); }
 
+/* 自選股標籤/分組 */
+.wl-glabel { font-size: .74rem; font-weight: 600; color: var(--muted); margin: 8px 0 5px; padding-bottom: 3px; border-bottom: 1px solid var(--border); }
+.wl-glabel:first-child { margin-top: 0; }
+.wl-tag { background: none; border: none; cursor: pointer; font-size: .82rem; padding: 0 4px; opacity: .6; }
+.wl-tag:hover { opacity: 1; }
+
 /* 名詞小百科 */
 .gloss-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
 .gloss-grid details { border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; background: var(--panel); }
@@ -962,6 +968,17 @@ window.taList = taList;
 const WL_KEY = "twmm_watchlist";
 function wlGet() { try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch (e) { return []; } }
 function wlHas(code) { return wlGet().includes(code); }
+const WL_TAG_KEY = "twmm_watchtags";
+function wlTagGet() { try { return JSON.parse(localStorage.getItem(WL_TAG_KEY) || "{}"); } catch (e) { return {}; } }
+function wlSetTag(code) {
+  const tags = wlTagGet();
+  const cur = tags[code] || "";
+  const t = (window.prompt(`為 ${(QUOTES[code] || [])[1] || code} 設定分組標籤（留空=取消分組）：`, cur) || "").trim().slice(0, 12);
+  if (t) tags[code] = t; else delete tags[code];
+  try { localStorage.setItem(WL_TAG_KEY, JSON.stringify(tags)); } catch (e) {}
+  renderWatchlist();
+}
+window.wlSetTag = wlSetTag;
 function wlToggle(code) {
   const a = wlGet(), i = a.indexOf(code);
   if (i >= 0) a.splice(i, 1); else a.push(code);
@@ -979,19 +996,31 @@ function renderWatchlist() {
     el.innerHTML = `<div class="sub">尚無自選股 — 右上搜尋個股，點 ★ 加入（存在本機瀏覽器，跨裝置不同步）</div>`;
     return;
   }
-  el.innerHTML = `<div class="wl-cards">` + codes.map(code => {
+  const tags = wlTagGet();
+  const card = code => {
     const r = QUOTES[code];
+    const tagBtn = `<button class="wl-tag" onclick="event.stopPropagation();wlSetTag('${code}')" title="設定標籤">🏷</button>`;
     if (!r) return `<div class="wl-card"><b>${code}</b> <span class="sub">查無行情</span>
       <button class="star on" data-code="${code}" style="float:right" onclick="event.stopPropagation();wlToggle('${code}')">★</button></div>`;
     const nw = newsFor(code, 1)[0];
     return `<div class="wl-card" onclick="openStock('${code}')" title="${fundLine(code) || ""}">
       <b>${r[1]}</b> <span class="sub">${code}</span>
-      <button class="star on" data-code="${code}" style="float:right" onclick="event.stopPropagation();wlToggle('${code}')">★</button><br>
+      <span style="float:right">${tagBtn}<button class="star on" data-code="${code}" onclick="event.stopPropagation();wlToggle('${code}')">★</button></span><br>
       <span class="${cls(r[4])}" style="font-weight:700">${r[3]}（${sign(r[4])}%）</span> <span class="spark" id="wl-sp-${code}"></span><br>
       <span class="sub">外資</span> ${lotsCell(r[7], r[9])}　<span class="sub">投信</span> ${lotsCell(r[8], r[10])}
       ${nw ? `<a class="wl-news" href="${nw.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📰 ${nw.title}</a>` : ""}
     </div>`;
-  }).join("") + `</div>`;
+  };
+  // 依標籤分組：有標籤者依標籤名排序在前，未分類殿後
+  const groups = {};
+  codes.forEach(c => { const t = tags[c] || ""; (groups[t] = groups[t] || []).push(c); });
+  const keys = Object.keys(groups).filter(k => k).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  if (groups[""]) keys.push("");
+  const anyTag = keys.some(k => k);
+  el.innerHTML = keys.map(k => {
+    const hd = anyTag ? `<div class="wl-glabel">${k || "未分類"}（${groups[k].length}）</div>` : "";
+    return hd + `<div class="wl-cards">` + groups[k].map(card).join("") + `</div>`;
+  }).join("");
   seriesFor(codes).then(m => codes.forEach(c => {
     const sp = document.getElementById("wl-sp-" + c);
     if (sp && m[c]) sp.innerHTML = sparkSVG(m[c]);
