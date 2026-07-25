@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"light");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
+<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"dark");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
    Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
@@ -25,8 +25,8 @@
   font-weight: 100 900; font-style: normal; font-display: swap;
 }
 :root {
-  --bg: #0a0e17; --panel: #121826; --panel2: #161d2e; --border: #232c40; --border-hi: #33415c;
-  --fg: #e8edf5; --muted: #8a97ad;
+  --bg: #070a11; --panel: #141b2b; --panel2: #1b2436; --border: #263049; --border-hi: #3b4a6a;
+  --fg: #eaf0f8; --muted: #96a3ba;
   --up: #ff453a; --down: #30d158; --flat: #8a97ad; /* 台股紅漲綠跌（Apple system red/green dark） */
   --warn: #ff9f0a; --accent: #0a84ff; --accent-soft: rgba(10,132,255,.13);
   --hi: #ff9f0a; --hi-soft: rgba(255,159,10,.12);   /* 琥珀：需注意/次要焦點 */
@@ -35,7 +35,7 @@
   --ease: cubic-bezier(.32,.72,0,1); --tr: .25s var(--ease);
   --surface: var(--panel);
   /* 厚材質陰影＋頂緣一道極淡亮線（光打在材質上緣） */
-  --shadow: 0 10px 30px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.04);
+  --shadow: 0 12px 34px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.05);
   --num: "Inter", -apple-system, ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Inter", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   --bar-flat: #33415c;
@@ -49,11 +49,12 @@ body { background: var(--bg); color: var(--fg); font-family: var(--sans); margin
 h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; } /* 大字負 tracking（apple-design §15） */
 /* 區塊＝一張 Bento 卡（不再是裸區塊直接堆）→ 密度不變但有邊界、不糊在一起 */
 section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 16px 18px; margin-bottom: var(--gap); transition: border-color var(--tr); }
+  padding: 16px 18px; margin-bottom: var(--gap); box-shadow: var(--shadow);
+  transition: border-color var(--tr), box-shadow var(--tr); }
 section:hover { border-color: var(--border-hi); }
-h2 { font-size: .82rem; font-weight: 600; padding: 0 0 10px; color: var(--muted); letter-spacing: .02em; }
-h2::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent); margin-right: 8px; vertical-align: 1px; }
+h2 { font-size: .95rem; font-weight: 650; padding: 0 0 10px; color: #cdd8ea; letter-spacing: .01em; }
+h2::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px rgba(10,132,255,.6); margin-right: 9px; vertical-align: 1px; }
 
 /* 捲軸 / 鍵盤焦點 / 減少動態 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -270,9 +271,9 @@ tr:last-child td { border-bottom: none; }
 .al-ind { font-size: .74rem; }
 .al-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
 .al-tag { font-size: .72rem; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
-.al-tag.up { color: var(--up); background: rgba(255,69,58,.12); }
-.al-tag.down { color: var(--down); background: rgba(48,209,88,.12); }
-.al-tag.warn { color: var(--warn); background: rgba(255,159,10,.13); }
+.al-tag.up { color: #ff7a72; background: rgba(255,69,58,.2); }
+.al-tag.down { color: #5be08a; background: rgba(48,209,88,.19); }
+.al-tag.warn { color: #ffb340; background: rgba(255,159,10,.2); }
 
 /* 熱力圖上色模式切換 */
 .hm-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; vertical-align: middle; }
@@ -673,7 +674,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 01:18";
+const BUILT_AT = "2026-07-26 01:45";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
