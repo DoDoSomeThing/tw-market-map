@@ -35,6 +35,7 @@ SCRIPTS = [
     "build_summary.py",   # 今日一句白話摘要（純規則、讀 breadth/market/flow/heatmap）
     "build_alerts.py",    # 今日異常警示（純規則、讀 inst_rank/ta）
     "build_highlow.py",   # 逼近 52 週高/低（純規則、讀 ta pos52w）
+    "build_sentiment.py", # 大盤情緒曲線（純規則、讀 history 快照收盤比對）
     "render.py",
 ]
 

@@ -119,7 +119,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
    (營收亮點 541→1266、資金流 1014→1959、個股動向 1269→2589)。 */
 #pane-focus > #sec-revhl, #pane-focus > #sec-market,
 #pane-focus > #sec-flow,  #pane-focus > #sec-inst,
-#pane-focus > #sec-trend { grid-column: span 12; }
+#pane-focus > #sec-trend, #pane-focus > #sec-sentiment { grid-column: span 12; }
 @media (max-width: 980px) {   /* 窄螢幕塌回單欄 */
   #pane-focus.active { display: block; }
   #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
@@ -315,6 +315,10 @@ tr:last-child td { border-bottom: none; }
 .trend-svg { width: 100%; height: 156px; display: block; }
 .trend-svg text { fill: var(--muted); font-size: 10px; }
 .trend-svg .zero { stroke: var(--border-hi); stroke-width: 1; }
+.sent-svg { width: 100%; height: 156px; display: block; }
+.sent-svg text { fill: var(--muted); font-size: 10px; }
+.sent-svg .mid { stroke: var(--border-hi); stroke-width: 1; stroke-dasharray: 3 3; }
+.sent-svg .ln { fill: none; stroke: var(--accent); stroke-width: 2; }
 
 /* 熱力圖 */
 #heatmap { width: 100%; }
@@ -533,6 +537,9 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-trend"><h2>外資近日買賣超趨勢 <span class="stamp" data-stamp="trend"></span></h2>
 <div class="sub">近 14 交易日外資單日淨買賣（億）｜紅=買超、綠=賣超｜現況描述、非訊號</div>
 <div id="trend"></div></section>
+<section id="sec-sentiment"><h2>大盤情緒曲線 <span class="stamp" data-stamp="sentiment"></span></h2>
+<div class="sub">近 14 交易日「上漲家數占比」｜>50%=偏多日、<50%=偏空日（虛線=50%）｜現況描述、非訊號</div>
+<div id="sentiment"></div></section>
 <section id="sec-flow"><h2>法人資金流 <span class="stamp" data-stamp="flow"></span></h2><div class="sub">個股買賣超聚合到族群（金額=股數×收盤估算）｜「外資」是數百家機構彙總，這是族群淨流向，非同一筆錢的移動｜現況描述，非訊號</div><div id="flow"></div></section>
 <section id="sec-inst"><h2>法人個股動向 <span class="stamp" data-stamp="inst_rank"></span></h2><div class="sub">買賣超金額=股數×收盤估算｜連買/連賣為現況描述，非進場訊號</div><div id="instrank"></div></section>
 </div>
@@ -2012,6 +2019,34 @@ function fundLine(code) {
       ${bars}${labels}
     </svg>`;
 })();
+(function () {   // ── 大盤情緒曲線（14 日上漲占比折線，手刻 SVG）──
+  const env = DATA.sentiment, el = document.getElementById("sentiment");
+  const stamp = document.querySelector('[data-stamp="sentiment"]');
+  if (stamp) stamp.innerHTML = stampFor(env);
+  if (!el) return;
+  if (!env || !env.ok) { el.innerHTML = `<div class="err">情緒資料失敗：${(env && env.error) || ""}</div>`; return; }
+  const s = (env.data.series || []).slice(-14);
+  if (s.length < 2) { el.innerHTML = `<div class="sub">情緒歷史不足</div>`; return; }
+  const W = 720, H = 156, padT = 14, padB = 22, padL = 26, padR = 8;
+  const plotH = H - padT - padB, plotW = W - padL - padR, n = s.length;
+  const X = i => padL + (n === 1 ? plotW / 2 : i * plotW / (n - 1));
+  const Y = p => padT + (100 - p) / 100 * plotH;               // 0..100% → 反轉
+  const midY = Y(50);
+  const pts = s.map((d, i) => `${X(i).toFixed(1)},${Y(d.pct).toFixed(1)}`).join(" ");
+  const dots = s.map((d, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(d.pct).toFixed(1)}" r="2.6" fill="${d.pct >= 50 ? "var(--up)" : "var(--down)"}"><title>${d.date}　上漲占比 ${d.pct}%（漲 ${d.up}／跌 ${d.down}）</title></circle>`).join("");
+  const lbl = i => `<text x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${s[i].date.slice(5)}</text>`;
+  const labels = [0, Math.floor(n / 2), n - 1].map(lbl).join("");
+  const last = s[s.length - 1];
+  el.innerHTML = `<div class="trend-head">
+      <span>最新上漲占比 <b class="${last.pct >= 50 ? "up" : "down"}">${last.pct}%</b></span>
+      <span class="sub">${last.pct >= 50 ? "偏多日" : "偏空日"}（漲 ${last.up}／跌 ${last.down}）</span>
+    </div>
+    <svg class="sent-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
+      <line class="mid" x1="${padL}" y1="${midY}" x2="${W - padR}" y2="${midY}"/>
+      <text x="2" y="${midY + 3}">50%</text>
+      <polyline class="ln" points="${pts}"/>${dots}${labels}
+    </svg>`;
+})();
 (function () {   // ── 逼近 52 週高/低 ──
   const env = DATA.highlow, el = document.getElementById("highlow");
   const stamp = document.querySelector('[data-stamp="highlow"]');
@@ -2287,7 +2322,7 @@ def main() -> None:
             ("indices", "market", "heatmap", "rank", "inst_rank", "topics_view", "mops",
              "tdcc", "chains_view", "flow", "fundamentals", "news", "breadth", "revenue_hl",
              "news_radar", "topic_discover", "changes", "dividend", "valuation", "summary", "alerts",
-             "market_trend", "highlow")}
+             "market_trend", "highlow", "sentiment")}
 
     # 搜尋索引 + 個股面板/自選股資料：全市場 4 碼個股
     # [code, name, industry, close, pct, 市場(t/o), 成交值, 外資張, 投信張, 外資連買, 投信連買]
