@@ -80,7 +80,7 @@ header.top { position: sticky; top: 0; z-index: 50; background: var(--bg); borde
 .tab { background: none; border: none; color: var(--muted); font-size: .92rem; padding: 9px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; font-family: inherit; border-radius: 8px 8px 0 0; transition: color var(--tr), background var(--tr); }
 .tab:hover { color: var(--fg); background: rgba(10,132,255,.08); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 12px 12px; }
 .tabpane { display: none; }
 .tabpane.active { display: block; animation: paneIn .3s var(--ease); }
 /* ── 焦點頁 Bento 拼盤 ──
@@ -677,7 +677,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-23", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 23:50";
+const BUILT_AT = "2026-07-27 00:07";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。

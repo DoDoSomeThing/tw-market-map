@@ -91,7 +91,7 @@ header.top { position: sticky; top: 0; z-index: 50; background: var(--bg); borde
 .tab { background: none; border: none; color: var(--muted); font-size: .92rem; padding: 9px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; font-family: inherit; border-radius: 8px 8px 0 0; transition: color var(--tr), background var(--tr); }
 .tab:hover { color: var(--fg); background: rgba(10,132,255,.08); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 12px 12px; }
 .tabpane { display: none; }
 .tabpane.active { display: block; animation: paneIn .3s var(--ease); }
 /* ── 焦點頁 Bento 拼盤 ──
