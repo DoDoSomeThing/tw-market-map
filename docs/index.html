@@ -25,27 +25,23 @@
   font-weight: 100 900; font-style: normal; font-display: swap;
 }
 :root {
-  --bg: #070a11; --panel: #141b2b; --panel2: #1b2436; --border: #263049; --border-hi: #3b4a6a;
-  --fg: #eaf0f8; --muted: #96a3ba; --head: #cdd8ea;
-  --up: #ff453a; --down: #30d158; --flat: #8a97ad; /* 台股紅漲綠跌（Apple system red/green dark） */
-  --warn: #ff9f0a; --accent: #0a84ff; --accent-soft: rgba(10,132,255,.13);
-  --hi: #ff9f0a; --hi-soft: rgba(255,159,10,.12);   /* 琥珀：需注意/次要焦點 */
-  --r: 18px; --r-sm: 12px; --gap: 16px;
-  /* Apple 感 easing：快出緩收（iOS sheet 曲線），取代等速 ease */
-  --ease: cubic-bezier(.32,.72,0,1); --tr: .25s var(--ease);
+  /* shadcn zinc 深色：中性近黑，靠細邊框而非重陰影 */
+  --bg: #09090b; --panel: #121214; --panel2: #18181b; --border: #27272a; --border-hi: #3f3f46;
+  --fg: #fafafa; --muted: #a1a1aa; --head: #f4f4f5;
+  --up: #ff453a; --down: #30d158; --flat: #a1a1aa; /* 台股紅漲綠跌 */
+  --warn: #f59e0b; --accent: #3b82f6; --accent-soft: rgba(59,130,246,.14);
+  --hi: #f59e0b; --hi-soft: rgba(245,158,11,.12);
+  --r: 10px; --r-sm: 7px; --gap: 16px;
+  --ease: cubic-bezier(.32,.72,0,1); --tr: .18s var(--ease);
   --surface: var(--panel);
-  /* 厚材質陰影＋頂緣一道極淡亮線（光打在材質上緣） */
-  --shadow: 0 12px 34px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.05);
+  --shadow: 0 1px 2px 0 rgba(0,0,0,.4);
   --num: "Inter", -apple-system, ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Inter", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
-  --bar-flat: #33415c;
+  --bar-flat: #3f3f46;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--fg); font-family: var(--sans); margin: 0 auto;
-  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
-  /* 區塊改卡片後，格線與卡片邊框會互相打架 → 只留頂部一道柔光，其餘乾淨 */
-  background-image: radial-gradient(1000px 400px at 50% -160px, rgba(59,130,246,.10), transparent 70%);
-  background-repeat: no-repeat; }
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
 h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; } /* 大字負 tracking（apple-design §15） */
 /* 區塊＝一張 Bento 卡（不再是裸區塊直接堆）→ 密度不變但有邊界、不糊在一起 */
 section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
@@ -53,8 +49,8 @@ section { background: var(--surface); border: 1px solid var(--border); border-ra
   transition: border-color var(--tr), box-shadow var(--tr); }
 section:hover { border-color: var(--border-hi); }
 h2 { font-size: .95rem; font-weight: 650; padding: 0 0 10px; color: var(--head); letter-spacing: .01em; }
-h2::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 8px rgba(10,132,255,.6); margin-right: 9px; vertical-align: 1px; }
+h2::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; vertical-align: 1px; }
 
 /* 捲軸 / 鍵盤焦點 / 減少動態 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -497,19 +493,17 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 :root { color-scheme: dark; }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f5f7; --panel: #ffffff; --panel2: #fbfcfe; --border: #e5e9f0; --border-hi: #cfd8e6;
-  --fg: #131a26; --muted: #5b6880; --head: #1b2536;
-  --up: #d70015; --down: #1d804c; --flat: #5b6880; /* Apple light red / 深化 green（白底可讀） */
-  --warn: #b45309; --accent: #0071e3; --accent-soft: rgba(0,113,227,.09); /* Apple 藍 */
-  --hi: #b45309; --hi-soft: rgba(180,83,9,.10);
+  /* shadcn zinc 淺色：白卡 + 極淡中性邊框、柔陰影 */
+  --bg: #f7f7f8; --panel: #ffffff; --panel2: #fafafa; --border: #e4e4e7; --border-hi: #d4d4d8;
+  --fg: #09090b; --muted: #71717a; --head: #18181b;
+  --up: #d70015; --down: #16a34a; --flat: #71717a; /* 台股紅漲綠跌（白底可讀） */
+  --warn: #b45309; --accent: #2563eb; --accent-soft: rgba(37,99,235,.08);
+  --hi: #b45309; --hi-soft: rgba(180,83,9,.09);
   --surface: #ffffff;
-  --shadow: 0 10px 30px rgba(23,35,58,.10);
-  --bar-flat: #cfd8e6;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --bar-flat: #d4d4d8;
 }
-/* 淺色背景去藍圖格線（Apple 乾淨底），只留頂部柔光 */
-:root[data-theme="light"] body { background-image:
-  radial-gradient(900px 360px at 50% -140px, rgba(0,113,227,.07), transparent 70%); }
-:root[data-theme="light"] header.top { background: var(--bg); border-bottom: 1px solid rgba(0,0,0,.07); box-shadow: 0 1px 12px rgba(23,35,58,.06); }
+:root[data-theme="light"] header.top { background: rgba(255,255,255,.8); border-bottom: 1px solid var(--border); box-shadow: none; }
 :root[data-theme="light"] .tab:hover { background: rgba(37,99,235,.07); }
 :root[data-theme="light"] th { background: rgba(238,243,250,.92); }
 :root[data-theme="light"] th, :root[data-theme="light"] td { border-bottom-color: rgba(219,227,239,.95); }
@@ -671,7 +665,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-23", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 17:16";
+const BUILT_AT = "2026-07-26 23:00";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
