@@ -37,7 +37,7 @@ TEMPLATE = """<!DOCTYPE html>
 }
 :root {
   --bg: #070a11; --panel: #141b2b; --panel2: #1b2436; --border: #263049; --border-hi: #3b4a6a;
-  --fg: #eaf0f8; --muted: #96a3ba;
+  --fg: #eaf0f8; --muted: #96a3ba; --head: #cdd8ea;
   --up: #ff453a; --down: #30d158; --flat: #8a97ad; /* 台股紅漲綠跌（Apple system red/green dark） */
   --warn: #ff9f0a; --accent: #0a84ff; --accent-soft: rgba(10,132,255,.13);
   --hi: #ff9f0a; --hi-soft: rgba(255,159,10,.12);   /* 琥珀：需注意/次要焦點 */
@@ -63,7 +63,7 @@ section { background: var(--surface); border: 1px solid var(--border); border-ra
   padding: 16px 18px; margin-bottom: var(--gap); box-shadow: var(--shadow);
   transition: border-color var(--tr), box-shadow var(--tr); }
 section:hover { border-color: var(--border-hi); }
-h2 { font-size: .95rem; font-weight: 650; padding: 0 0 10px; color: #cdd8ea; letter-spacing: .01em; }
+h2 { font-size: .95rem; font-weight: 650; padding: 0 0 10px; color: var(--head); letter-spacing: .01em; }
 h2::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 8px rgba(10,132,255,.6); margin-right: 9px; vertical-align: 1px; }
 
@@ -282,9 +282,9 @@ tr:last-child td { border-bottom: none; }
 .al-ind { font-size: .74rem; }
 .al-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
 .al-tag { font-size: .72rem; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
-.al-tag.up { color: #ff7a72; background: rgba(255,69,58,.2); }
-.al-tag.down { color: #5be08a; background: rgba(48,209,88,.19); }
-.al-tag.warn { color: #ffb340; background: rgba(255,159,10,.2); }
+.al-tag.up { color: var(--up); background: rgba(255,69,58,.16); }
+.al-tag.down { color: var(--down); background: rgba(48,209,88,.15); }
+.al-tag.warn { color: var(--warn); background: rgba(255,159,10,.16); }
 
 /* 熱力圖上色模式切換 */
 .hm-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; vertical-align: middle; }
@@ -509,7 +509,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f5f5f7; --panel: #ffffff; --panel2: #fbfcfe; --border: #e5e9f0; --border-hi: #cfd8e6;
-  --fg: #131a26; --muted: #5b6880;
+  --fg: #131a26; --muted: #5b6880; --head: #1b2536;
   --up: #d70015; --down: #1d804c; --flat: #5b6880; /* Apple light red / 深化 green（白底可讀） */
   --warn: #b45309; --accent: #0071e3; --accent-soft: rgba(0,113,227,.09); /* Apple 藍 */
   --hi: #b45309; --hi-soft: rgba(180,83,9,.10);
