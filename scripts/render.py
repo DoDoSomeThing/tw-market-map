@@ -42,10 +42,11 @@ TEMPLATE = """<!DOCTYPE html>
   --up: #ff453a; --down: #30d158; --flat: #a1a1aa; /* 台股紅漲綠跌 */
   --warn: #f59e0b; --accent: #3b82f6; --accent-soft: rgba(59,130,246,.14);
   --hi: #f59e0b; --hi-soft: rgba(245,158,11,.12);
-  --r: 10px; --r-sm: 7px; --gap: 16px;
+  --r: 16px; --r-sm: 12px; --gap: 18px;
   --ease: cubic-bezier(.32,.72,0,1); --tr: .18s var(--ease);
   --surface: var(--panel);
-  --shadow: 0 1px 2px 0 rgba(0,0,0,.4);
+  --shadow: 0 8px 26px rgba(0,0,0,.5);
+  --grad: linear-gradient(310deg, #2563eb, #22d3ee);   /* Soft UI 藍→青漸層 accent */
   --num: "Inter", -apple-system, ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Inter", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   --bar-flat: #3f3f46;
@@ -56,12 +57,12 @@ body { background: var(--bg); color: var(--fg); font-family: var(--sans); margin
 h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; } /* 大字負 tracking（apple-design §15） */
 /* 區塊＝一張 Bento 卡（不再是裸區塊直接堆）→ 密度不變但有邊界、不糊在一起 */
 section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 16px 18px; margin-bottom: var(--gap); box-shadow: var(--shadow);
+  padding: 18px 20px; margin-bottom: var(--gap); box-shadow: var(--shadow);
   transition: border-color var(--tr), box-shadow var(--tr); }
-section:hover { border-color: var(--border-hi); }
+section:hover { box-shadow: var(--shadow), 0 0 0 1px var(--border-hi); }
 h2 { font-size: .95rem; font-weight: 650; padding: 0 0 10px; color: var(--head); letter-spacing: .01em; }
-h2::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent); margin-right: 8px; vertical-align: 1px; }
+h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 3px;
+  background: var(--grad); margin-right: 9px; vertical-align: 0; }
 
 /* 捲軸 / 鍵盤焦點 / 減少動態 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -116,7 +117,17 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
    (營收亮點 541→1266、資金流 1014→1959、個股動向 1269→2589)。 */
 #pane-focus > #sec-revhl, #pane-focus > #sec-market,
 #pane-focus > #sec-flow,  #pane-focus > #sec-inst,
-#pane-focus > #sec-sentiment { grid-column: span 12; }
+#pane-focus > #sec-sentiment, #pane-focus > #kpi { grid-column: span 12; }
+/* KPI 大卡列（Soft UI 風：大數字 + 漸層圖示 badge） */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
+@media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .kpi-grid { grid-template-columns: 1fr; } }
+.kpi-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px 18px; overflow: hidden; }
+.kpi-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.kpi-value { font-size: 1.7rem; font-weight: 700; line-height: 1.15; margin-top: 5px; }
+.kpi-chg { font-size: .8rem; font-weight: 600; margin-top: 3px; }
+.kpi-badge { position: absolute; top: 15px; right: 15px; width: 42px; height: 42px; border-radius: 12px; background: var(--grad); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 14px rgba(37,99,235,.3); }
+.kpi-badge svg { width: 21px; height: 21px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 980px) {   /* 窄螢幕塌回單欄 */
   #pane-focus.active { display: block; }
   #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
@@ -245,13 +256,13 @@ section { margin-bottom: 14px; }
 @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
 /* 表格：區塊已是卡片 → 表格本身脫掉外框/底色，改用細分隔線＋留白（去「報表感」的關鍵） */
 table { width: 100%; border-collapse: separate; border-spacing: 0; background: transparent; border: none; border-radius: var(--r-sm); overflow: hidden; font-size: .85rem; }
-th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+th, td { padding: 12px 14px; text-align: right; border-bottom: 1px solid var(--border); }
 th:first-child, td:first-child { text-align: left; }
-th { color: var(--muted); font-weight: 500; font-size: .7rem; letter-spacing: .04em; background: transparent; user-select: none; cursor: pointer; border-bottom-color: var(--border-hi); }
+th { color: var(--muted); font-weight: 500; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; background: var(--panel2); user-select: none; cursor: pointer; border-bottom-color: var(--border); }
 th[data-dir="desc"]::after { content: " ▾"; color: var(--accent); }
 th[data-dir="asc"]::after { content: " ▴"; color: var(--accent); }
 tr:nth-child(even) td { background: transparent; }   /* 斑馬紋拿掉：卡片＋分隔線已足夠，斑馬紋讓畫面更吵 */
-tr:hover td { background: var(--accent-soft); }
+tr:hover td { background: var(--panel2); }
 tr:last-child td { border-bottom: none; }
 
 /* 今日一句摘要 */
@@ -511,15 +522,15 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
   --warn: #b45309; --accent: #2563eb; --accent-soft: rgba(37,99,235,.08);
   --hi: #b45309; --hi-soft: rgba(180,83,9,.09);
   --surface: #ffffff;
-  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow: 0 4px 12px rgba(0,0,0,.04), 0 18px 27px rgba(0,0,0,.06);   /* Soft UI 柔散陰影 */
+  --grad: linear-gradient(310deg, #2152ff, #21d4fd);
   --bar-flat: #d4d4d8;
 }
 :root[data-theme="light"] header.top { background: rgba(255,255,255,.8); border-bottom: 1px solid var(--border); box-shadow: none; }
 :root[data-theme="light"] .tab:hover { background: rgba(37,99,235,.07); }
-:root[data-theme="light"] th { background: rgba(238,243,250,.92); }
-:root[data-theme="light"] th, :root[data-theme="light"] td { border-bottom-color: rgba(219,227,239,.95); }
-:root[data-theme="light"] tr:nth-child(even) td { background: rgba(23,35,58,.025); }
-:root[data-theme="light"] tr:hover td { background: rgba(37,99,235,.06); }
+:root[data-theme="light"] th { background: #fafafa; }
+:root[data-theme="light"] th, :root[data-theme="light"] td { border-bottom-color: var(--border); }
+:root[data-theme="light"] tr:hover td { background: #f4f4f5; }
 :root[data-theme="light"] .mops-item, :root[data-theme="light"] .chg-item { border-bottom-color: rgba(219,227,239,.95); }
 :root[data-theme="light"] .co { border-top-color: rgba(219,227,239,.95); }
 :root[data-theme="light"] .radar-card.active { background: linear-gradient(180deg, #e9f0fe, #f6f9ff); }
@@ -554,6 +565,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <main>
 
 <div class="tabpane" id="pane-focus">
+<div id="kpi" class="kpi-grid"></div>
 <section id="sec-summary"><h2>今日一句 <span class="stamp" data-stamp="summary"></span></h2>
 <div class="sub">收盤數據規則彙整成人話｜現況直述、非預測、非買賣訊號</div>
 <div id="summary"></div></section>
@@ -2102,6 +2114,35 @@ function fundLine(code) {
       <span class="tag t自結">${it.source}</span>${feeder}${tags}
       <a href="${it.link}" target="_blank" rel="noopener" style="color:var(--fg)">${it.title}</a></div>`;
   }).join("") + `</div>`;
+})();
+
+// ── KPI 大卡列（Soft UI 風：加權指數／上漲占比／外資／投信）──
+(function () {
+  const el = document.getElementById("kpi");
+  if (!el) return;
+  const IC = {
+    chart: `<svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>`,
+    pulse: `<svg viewBox="0 0 24 24"><polyline points="3 12 8 12 11 4 15 20 18 12 21 12"/></svg>`,
+    globe: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>`,
+    bag: `<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  };
+  const cards = [];
+  const idx = DATA.indices.ok ? (DATA.indices.data.cards || []).find(c => c.short === "TAIEX") : null;
+  if (idx) cards.push({ label: "加權指數", value: idx.close.toLocaleString(), chg: `${idx.pct > 0 ? "+" : ""}${idx.pct}%（${idx.change > 0 ? "+" : ""}${idx.change}）`, dir: cls(idx.pct), icon: IC.chart });
+  if (DATA.breadth.ok) { const b = DATA.breadth.data, n = (b.up + b.down) || 1, r = Math.round(b.up / n * 100); cards.push({ label: "上漲占比", value: r + "%", chg: `漲 ${b.up}／跌 ${b.down}`, dir: r >= 50 ? "up" : "down", icon: IC.pulse }); }
+  if (DATA.market.ok) {
+    const tw = (DATA.market.data.inst_twse || {}).rows || {}, tp = (DATA.market.data.inst_tpex || {}).rows || {};
+    const net = k => ((tw[k] || {}).net || 0) / 1e8 + ((tp[k] || {}).net || 0) / 1e8;
+    const f = net("foreign"), t = net("trust");
+    cards.push({ label: "外資買賣超", value: `${f > 0 ? "+" : ""}${Math.round(f)} 億`, chg: f >= 0 ? "買超" : "賣超", dir: cls(f), icon: IC.globe });
+    cards.push({ label: "投信買賣超", value: `${t > 0 ? "+" : ""}${Math.round(t)} 億`, chg: t >= 0 ? "買超" : "賣超", dir: cls(t), icon: IC.bag });
+  }
+  el.innerHTML = cards.map(c => `<div class="kpi-card">
+    <div class="kpi-badge">${c.icon}</div>
+    <div class="kpi-label">${c.label}</div>
+    <div class="kpi-value ${c.dir}">${c.value}</div>
+    <div class="kpi-chg ${c.dir}">${c.chg}</div>
+  </div>`).join("");
 })();
 
 // ── 市場寬度 ──
