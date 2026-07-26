@@ -588,7 +588,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 </div>
 
 <div class="tabpane" id="pane-chains">
-<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁（裝 kanpan 擴充會自動掛面板）</div><div id="chain-chips"></div><div id="chains"></div></section>
+<section id="sec-chains"><h2>產業價值鏈 <span class="stamp" data-stamp="chains_view"></span></h2><div class="sub">內容自產（上中下游整理，非官方分類、非投資建議）｜點個股開 Yahoo 股市頁</div><div id="chain-chips"></div><div id="chains"></div></section>
 </div>
 
 <div class="tabpane" id="pane-market">
@@ -671,7 +671,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-23", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 17:09";
+const BUILT_AT = "2026-07-26 17:16";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -871,8 +871,7 @@ function openStock(code) {
       <div class="sp-col">
         <div id="sp-ta"></div>
         ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
-        <div style="padding-top:6px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a>
-          <span class="sub">（裝 kanpan 擴充會自動掛面板）</span></div>
+        <div style="padding-top:6px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a></div>
       </div>
     </div>`;
   document.getElementById("sp-overlay").style.display = "block";
@@ -1995,7 +1994,7 @@ function streakBadge(s) {
       <div class="stage"><div class="stage-title">${st.name}</div><div class="nodes">` +
       st.nodes.map(nd => `<div class="node"><div class="node-label">${nd.label} <span class="sub">${nd.members.length} 檔</span></div>
         <div class="node-desc">${nd.desc}</div>` +
-        nd.members.map(m => `<div class="co" data-code="${m.code}" data-mkt="${m.market || "twse"}" title="開 Yahoo 股市 ${m.code}（kanpan 擴充自動掛面板）${fundLine(m.code) ? "&#10;" + fundLine(m.code) : ""}">
+        nd.members.map(m => `<div class="co" data-code="${m.code}" data-mkt="${m.market || "twse"}" title="開 Yahoo 股市 ${m.code}${fundLine(m.code) ? "&#10;" + fundLine(m.code) : ""}">
           <span class="co-nm">${m.name} <span class="sub">${m.code}</span></span>
           ${lotsTag("外資", m.f_lots)}${lotsTag("投信", m.t_lots)}
           <span class="co-px ${cls(m.pct)}">${m.close} (${sign(m.pct)}%)</span></div>`).join("") +

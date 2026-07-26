@@ -12,7 +12,7 @@ MIN_NET_VALUE = 50_000_000  # 買賣超估值 < 5 千萬不入榜（雜訊）
 
 
 def streak(vals: list[float]) -> int:
-    """從最新往回數同向天數（kanpan inst._streak 思路）。正=連買、負=連賣。"""
+    """從最新往回數同向天數。正=連買、負=連賣。"""
     if not vals or not vals[0]:
         return 0
     sign = 1 if vals[0] > 0 else -1
