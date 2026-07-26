@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"dark");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
+<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"light");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
    Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
@@ -671,7 +671,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-07-24", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-07-26 01:50";
+const BUILT_AT = "2026-07-26 10:15";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。

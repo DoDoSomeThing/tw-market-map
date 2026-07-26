@@ -24,7 +24,7 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"dark");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
+<script>try{document.documentElement.dataset.theme=(localStorage.getItem("theme")||"light");}catch(e){document.documentElement.dataset.theme="light";}</script><!-- 深淺色：localStorage 記憶，預設淺色；切換按鈕見 header -->
 <style>
 /* 設計系統（2026-07-18 Apple 化）— 基於 2026-07-17 Bento 改版，套 apple-design skill：
    Inter Variable 內嵌（≈SF Pro，三平台一致）＋ Apple 系統色（藍 #0a84ff 系、紅綠取 system colors）
