@@ -120,7 +120,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 4px 12px 12px; }
    (營收亮點 541→1266、資金流 1014→1959、個股動向 1269→2589)。 */
 #pane-focus > #sec-revhl, #pane-focus > #sec-market,
 #pane-focus > #sec-flow,  #pane-focus > #sec-inst,
-#pane-focus > #sec-trend, #pane-focus > #sec-sentiment { grid-column: span 12; }
+#pane-focus > #sec-sentiment { grid-column: span 12; }
 @media (max-width: 980px) {   /* 窄螢幕塌回單欄 */
   #pane-focus.active { display: block; }
   #pane-focus > section, #pane-focus > .bento-col { margin-bottom: var(--gap); }
@@ -563,7 +563,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-summary"><h2>今日一句 <span class="stamp" data-stamp="summary"></span></h2>
 <div class="sub">收盤數據規則彙整成人話｜現況直述、非預測、非買賣訊號</div>
 <div id="summary"></div></section>
-<section id="sec-alerts"><h2>今日異常 ⚠️ <span class="stamp" data-stamp="alerts"></span></h2>
+<section id="sec-alerts"><h2>今日異常 <span class="stamp" data-stamp="alerts"></span></h2>
 <div class="sub">規則自動偵測極端值：外資買賣超 ≥30億｜投信 ≥10億｜爆量 ≥3倍均量｜點列可看個股｜現況描述、非訊號</div>
 <div id="alerts"></div></section>
 <section id="sec-changes"><h2>今日異動 <span class="stamp" data-stamp="changes"></span></h2>
@@ -576,9 +576,6 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-indices"><h2>國際指數 <span class="stamp" data-stamp="indices"></span></h2><div id="indices"></div></section>
 <section id="sec-revhl"><h2>營收亮點 <span class="stamp" data-stamp="revenue_hl"></span></h2><div class="sub" id="revhl-sub"></div><div id="revhl"></div></section>
 <section id="sec-market"><h2>三大法人與資券 <span class="stamp" data-stamp="market"></span></h2><div id="market"></div></section>
-<section id="sec-trend"><h2>外資近日買賣超趨勢 <span class="stamp" data-stamp="trend"></span></h2>
-<div class="sub">近 14 交易日外資單日淨買賣（億）｜紅=買超、綠=賣超｜現況描述、非訊號</div>
-<div id="trend"></div></section>
 <section id="sec-sentiment"><h2>大盤情緒曲線 <span class="stamp" data-stamp="sentiment"></span></h2>
 <div class="sub">近 14 交易日「上漲家數占比」｜>50%=偏多日、<50%=偏空日（虛線=50%）｜現況描述、非訊號</div>
 <div id="sentiment"></div></section>
@@ -2141,39 +2138,6 @@ function fundLine(code) {
     `<div class="al-group"><div class="al-glabel">${label}（${list.length}）</div>${list.map(row).join("")}</div>`;
   const html = group("法人爆買賣", env.data.inst) + group("爆量", env.data.vol);
   el.innerHTML = html || `<div class="sub">今日無明顯異常。</div>`;
-})();
-(function () {   // ── 外資買賣超趨勢（14 日分歧長條，手刻 SVG 無依賴）──
-  const env = DATA.market_trend, el = document.getElementById("trend");
-  const stamp = document.querySelector('[data-stamp="trend"]');
-  if (stamp) stamp.innerHTML = stampFor(env);
-  if (!el) return;
-  if (!env || !env.ok) { el.innerHTML = `<div class="err">趨勢資料失敗：${(env && env.error) || ""}</div>`; return; }
-  const s = (env.data.series || []).slice(-14);
-  if (!s.length) { el.innerHTML = `<div class="sub">無趨勢資料</div>`; return; }
-  const W = 720, H = 156, padT = 16, padB = 22;
-  const plotH = H - padT - padB, zeroY = padT + plotH / 2;
-  const maxAbs = Math.max(...s.map(d => Math.abs(d.foreign)), 1);
-  const sc = (plotH / 2) / maxAbs, n = s.length, bw = W / n;
-  const bars = s.map((d, i) => {
-    const x = i * bw + bw * 0.18, w = bw * 0.64, h = Math.abs(d.foreign) * sc;
-    const y = d.foreign >= 0 ? zeroY - h : zeroY;
-    const color = d.foreign >= 0 ? "var(--up)" : "var(--down)";
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" fill="${color}" rx="1.5"><title>${d.date}　外資 ${d.foreign > 0 ? "+" : ""}${d.foreign} 億</title></rect>`;
-  }).join("");
-  const lbl = (i) => `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${H - 7}" text-anchor="middle">${s[i].date.slice(5)}</text>`;
-  const labels = [0, Math.floor(n / 2), n - 1].map(lbl).join("");
-  const fSum = s.reduce((a, d) => a + d.foreign, 0);
-  const tSum = s.reduce((a, d) => a + (d.trust || 0), 0);
-  const last = s[s.length - 1];
-  const w = v => `<b class="${cls(v)}">${v > 0 ? "+" : ""}${Math.round(v)}</b>`;
-  el.innerHTML = `<div class="trend-head">
-      <span>最新外資 ${w(last.foreign)} 億</span>
-      <span class="sub">近 ${n} 日累計：外資 ${w(fSum)} 億・投信 ${w(tSum)} 億</span>
-    </div>
-    <svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
-      <line class="zero" x1="0" y1="${zeroY}" x2="${W}" y2="${zeroY}"/>
-      ${bars}${labels}
-    </svg>`;
 })();
 (function () {   // ── 大盤情緒曲線（14 日上漲占比折線，手刻 SVG）──
   const env = DATA.sentiment, el = document.getElementById("sentiment");
