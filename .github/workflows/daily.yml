@@ -83,6 +83,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # 整體失敗 or 部分模組失敗 or archive 缺口 → 開 Issue（GitHub 自動寄信通知）
+      # 已有開著的異常 Issue 就改留言，不再開新的 —— 一天可能重跑多次，每次開一支會洗版。
       - name: Notify on failure
         if: always() && (steps.pipeline.outcome == 'failure' || steps.check.outputs.partial != '' || steps.check.outputs.gap != '')
         env:
@@ -108,8 +109,32 @@ jobs:
           </details>
           EOF
           )
-          gh issue create --title "$TITLE" --body "$BODY" --label "" || \
+          # 標題前綴當作辨識鍵（不靠 label —— repo 沒建 label 時 --label 會失敗）
+          OPEN=$(gh issue list --state open --limit 50 --json number,title \
+                 --jq '[.[] | select(.title | startswith("❌ daily-update")) | .number] | first // empty')
+          if [ -n "$OPEN" ]; then
+            echo "已有開著的異常 Issue #$OPEN → 追加留言"
+            gh issue comment "$OPEN" --body "$BODY"
+          else
             gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      # 這次跑完全正常 → 把還開著的異常 Issue 關掉。
+      # 沒有這步的話，隔天重跑成功也不會關，Issue 會變殭屍（誤導成「還壞著」）。
+      - name: Auto-close alert issues on recovery
+        if: always() && steps.pipeline.outcome == 'success' && steps.check.outputs.partial == '' && steps.check.outputs.gap == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue list --state open --limit 50 --json number,title \
+            --jq '.[] | select(.title | startswith("❌ daily-update")) | .number' \
+          | while read -r N; do
+              [ -n "$N" ] || continue
+              echo "管線已恢復 → 關閉 Issue #$N"
+              gh issue comment "$N" --body "✅ 管線已恢復正常（全部模組完成、無 archive 缺口），自動關閉。Run: $RUN_URL"
+              gh issue close "$N"
+            done
 
 
       # 存回今日更新後的視窗（每次 run 唯一 key，滾動前進）
