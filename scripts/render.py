@@ -2405,7 +2405,7 @@ function fundLine(code) {
     ["大戶 400張+", c => { const b = TD()[c]; return b ? b[0] + "%" : "—"; }],
   ];
   function render() {
-    const codes = (inp.value.match(/\d{4}/g) || []).filter(c => QUOTES[c]);
+    const codes = (inp.value.match(/\\d{4}/g) || []).filter(c => QUOTES[c]);
     const uniq = [...new Set(codes)].slice(0, 4);
     if (!uniq.length) { res.innerHTML = `<div class="scr-count">輸入至少一檔有效代號（4 位數字）。</div>`; return; }
     const head = uniq.map(c => `<th><b>${QUOTES[c][1]}</b><br><span class="sub">${c}${QUOTES[c][2] ? "・" + QUOTES[c][2] : ""}</span></th>`).join("");
