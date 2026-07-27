@@ -8,3 +8,7 @@ __pycache__/
 # cache miss 時由 data/history_ohlc/（永久 archive 正本）用 --from-archive 秒重建（零網路）。
 # 永久累積的正本是 data/history_ohlc/YYYY-MM-DD.json（append-only、每日一支 ~80KB、有進 git）。
 data/ohlc_window.json.gz
+
+# 工具快取／本機 agent 設定（不進 git）
+.ruff_cache/
+.claude/
