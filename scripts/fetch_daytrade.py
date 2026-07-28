@@ -11,7 +11,7 @@ TOP = 30
 MIN_VALUE = 0.5e8   # 成交值 ≥ 5000 萬
 
 
-def _cols(fields: list) -> tuple[int | None, int | None]:
+def twtb4u_cols(fields: list) -> tuple[int | None, int | None]:
     """回傳 (證券名稱欄, 當沖成交股數欄) 的索引；找不到給 None。"""
     i_name = i_shares = None
     for i, f in enumerate(fields):
@@ -44,7 +44,7 @@ def main() -> None:
 
     # 欄位位置用名稱查，不寫死索引：TWSE 曾在同一端點回不同欄數的版本（少了註記欄
     # 就整批 IndexError，整個模組掛掉 → 當天當沖資料靜默缺一格）。
-    i_name, i_shares = _cols(table.get("fields") or [])
+    i_name, i_shares = twtb4u_cols(table.get("fields") or [])
     if i_shares is None:
         write_error("daytrade", "TWSE TWTB4U",
                     f"當沖表找不到成交股數欄，實得欄位：{table.get('fields')}")
@@ -102,7 +102,7 @@ def _update_trend(twtb_json: dict, date_iso: str | None) -> None:
         fields = t.get("fields") or [""]
         if fields[0] != "證券代號":
             continue
-        _, i_shares = _cols(fields)
+        _, i_shares = twtb4u_cols(fields)
         if i_shares is None:
             continue
         for row in t.get("data", []):

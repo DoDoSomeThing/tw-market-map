@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 
+from fetch_daytrade import twtb4u_cols   # 欄位定位共用一份，免得兩支各寫死一次索引
 from tw_common import http_get_json, parse_num, roc_to_iso, write_json
 
 FMTQIK = "https://www.twse.com.tw/exchangeReport/FMTQIK?date={ym}01&response=json"
@@ -35,10 +36,16 @@ def daytrade_shares(iso: str) -> float | None:
         return None
     total = 0.0
     for t in j.get("tables", []):
-        if (t.get("fields") or [""])[0] != "證券代號":
+        fields = t.get("fields") or [""]
+        if fields[0] != "證券代號":
+            continue
+        _, i_shares = twtb4u_cols(fields)
+        if i_shares is None:
             continue
         for row in t.get("data", []):
-            v = parse_num(row[3])
+            if len(row) <= i_shares:
+                continue
+            v = parse_num(row[i_shares])
             if v:
                 total += v
     return total or None
