@@ -11,6 +11,18 @@ TOP = 30
 MIN_VALUE = 0.5e8   # 成交值 ≥ 5000 萬
 
 
+def _cols(fields: list) -> tuple[int | None, int | None]:
+    """回傳 (證券名稱欄, 當沖成交股數欄) 的索引；找不到給 None。"""
+    i_name = i_shares = None
+    for i, f in enumerate(fields):
+        f = (f or "").strip()
+        if f == "證券名稱":
+            i_name = i
+        elif "成交股數" in f and i_shares is None:
+            i_shares = i
+    return i_name, i_shares
+
+
 def main() -> None:
     daily = read_json("daily_all")
     # 用 daily 的資料日對齊；抓不到就用今天
@@ -30,6 +42,14 @@ def main() -> None:
         write_error("daytrade", "TWSE TWTB4U", "找不到當沖交易表")
         return
 
+    # 欄位位置用名稱查，不寫死索引：TWSE 曾在同一端點回不同欄數的版本（少了註記欄
+    # 就整批 IndexError，整個模組掛掉 → 當天當沖資料靜默缺一格）。
+    i_name, i_shares = _cols(table.get("fields") or [])
+    if i_shares is None:
+        write_error("daytrade", "TWSE TWTB4U",
+                    f"當沖表找不到成交股數欄，實得欄位：{table.get('fields')}")
+        return
+
     meta = {}
     if daily.get("ok"):
         for s in daily["data"].get("stocks", []):
@@ -38,11 +58,13 @@ def main() -> None:
     rows = []
     by_code = {}    # 全量 {code: 當沖比%}：list 只有 top 30，個股面板要查任一檔都得有值
     for row in table["data"]:
+        if len(row) <= i_shares:
+            continue
         code = (row[0] or "").strip()
         m = meta.get(code)
         if len(code) != 4 or not code.isdigit() or not m:
             continue
-        dt_shares = parse_num(row[3])       # 當沖成交股數
+        dt_shares = parse_num(row[i_shares])       # 當沖成交股數
         vol = m.get("value") and m.get("vol")
         if not dt_shares or not vol or vol <= 0:
             continue
@@ -52,7 +74,8 @@ def main() -> None:
         # 面板顯示時另標註成交值供判讀。
         if (m.get("value") or 0) < MIN_VALUE:
             continue
-        rows.append({"code": code, "name": (row[1] or "").strip() or code,
+        nm = (row[i_name] or "").strip() if i_name is not None and len(row) > i_name else ""
+        rows.append({"code": code, "name": nm or code,
                      "industry": m.get("industry") or "", "pct": m.get("pct"),
                      "close": m.get("close"), "ratio": round(ratio, 1),
                      "value": round((m.get("value") or 0) / 1e8, 1)})
@@ -76,10 +99,16 @@ def _update_trend(twtb_json: dict, date_iso: str | None) -> None:
         return
     dt_total = 0.0
     for t in twtb_json.get("tables", []):
-        if (t.get("fields") or [""])[0] != "證券代號":
+        fields = t.get("fields") or [""]
+        if fields[0] != "證券代號":
+            continue
+        _, i_shares = _cols(fields)
+        if i_shares is None:
             continue
         for row in t.get("data", []):
-            v = parse_num(row[3])
+            if len(row) <= i_shares:
+                continue
+            v = parse_num(row[i_shares])
             if v:
                 dt_total += v
     ym = date_iso.replace("-", "")[:6]
