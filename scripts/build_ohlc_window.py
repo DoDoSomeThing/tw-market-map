@@ -14,6 +14,7 @@
 #   python3 scripts/build_ohlc_window.py --seed              # 一次性種子（TWSE/TPEx 按日，建議）
 #   FINMIND_TOKEN=... python3 scripts/build_ohlc_window.py --seed-finmind   # 備援種子法
 #   python3 scripts/build_ohlc_window.py                     # 每日 append（run_all 內呼叫）
+#   python3 scripts/build_ohlc_window.py --repair-archive    # 補回 archive 缺市場的日子（只加不改）
 from __future__ import annotations
 
 import argparse
@@ -263,6 +264,56 @@ def _fetch_tpex_day(iso: str) -> dict[str, dict] | None:
     return out or None
 
 
+def repair_archive(dates: list[str] | None = None, *, ratio: float = 0.8) -> int:
+    """補回 archive 缺市場的日子（TWSE/TPEx 端點吃任意舊日期）。
+
+    只做加法：既有的 code 一律保留原值，只塞進快照裡沒有的 code。
+    archive 是永久正本，修補也不該改動已經記下來的價格。
+
+    dates=None → 自動偵測（檔數 < 全體中位數 × ratio 的日子）。
+    """
+    tw_common.FETCH_INTERVAL = SEED_INTERVAL
+    files = sorted(ARCHIVE_DIR.glob("????-??-??.json")) if ARCHIVE_DIR.exists() else []
+    if not files:
+        print("[ERR] archive 空，無可修補")
+        return 1
+    counts = {f.stem: len(json.loads(f.read_text(encoding="utf-8")).get("stocks", {}))
+              for f in files}
+    if dates is None:
+        med = sorted(counts.values())[len(counts) // 2]
+        dates = sorted(d for d, n in counts.items() if n < med * ratio)
+        print(f"[修補] 中位數 {med} 檔，門檻 {med * ratio:.0f} → 偵測到 {len(dates)} 天待補")
+    if not dates:
+        print("[OK ] 無需修補")
+        return 0
+
+    fixed = 0
+    for iso in dates:
+        p = ARCHIVE_DIR / f"{iso}.json"
+        if not p.exists():
+            print(f"  {iso}  快照不存在，跳過")
+            continue
+        snap = json.loads(p.read_text(encoding="utf-8"))
+        cur = snap.get("stocks", {})
+        before = len(cur)
+        for fetch in (_fetch_twse_day, _fetch_tpex_day):
+            day = fetch(iso)
+            if not day:
+                continue
+            for c, b in day.items():
+                if c not in cur:   # 只補洞，既有值不動
+                    cur[c] = [b["o"], b["h"], b["l"], b["c"], b.get("v") or 0]
+        if len(cur) > before:
+            snap["stocks"] = cur
+            p.write_text(json.dumps(snap, separators=(",", ":")), encoding="utf-8")
+            print(f"  {iso}  {before} → {len(cur)} 檔（+{len(cur) - before}）")
+            fixed += 1
+        else:
+            print(f"  {iso}  {before} 檔，無新增（來源也沒有）")
+    print(f"[OK ] 修補完成：{fixed}/{len(dates)} 天有補到")
+    return 0
+
+
 def seed_bydate() -> int:
     """逐交易日往回抓 TWSE+TPEx，湊滿 SEED_DAYS 天 → 建視窗。零 FinMind 配額。"""
     tw_common.FETCH_INTERVAL = SEED_INTERVAL  # 覆寫成較短間隔，加速歷史回補
@@ -425,7 +476,14 @@ def main() -> int:
                     help="由 data/history_ohlc/ 重建視窗（cache miss 用；零網路）")
     ap.add_argument("--materialize-archive", action="store_true",
                     help="一次性：把現有視窗攤成每日快照檔，建立 archive 正本")
+    ap.add_argument("--repair-archive", action="store_true",
+                    help="補回 archive 缺市場的日子（只加不改；不給 --dates 則自動偵測）")
+    ap.add_argument("--dates", default="",
+                    help="搭配 --repair-archive：逗號分隔的 YYYY-MM-DD，指定要補的日子")
     args = ap.parse_args()
+    if args.repair_archive:
+        ds = [d.strip() for d in args.dates.split(",") if d.strip()]
+        return repair_archive(ds or None)
     if args.seed_finmind:
         return seed_finmind()
     if args.seed:
