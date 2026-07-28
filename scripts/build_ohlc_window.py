@@ -79,13 +79,29 @@ def save_window(win: dict) -> None:
 
 # ── archive（永久正本）──
 
-def write_day_snapshot(iso: str, day: dict[str, dict]) -> None:
+def write_day_snapshot(iso: str, day: dict[str, dict], *, guard: bool = False) -> int:
     """寫 data/history_ohlc/<iso>.json（全市場當日 OHLCV，append-only）。
-    存未壓縮 JSON：git 內部本來就 zlib 壓（~29KB），檔案還保持可讀。"""
+    存未壓縮 JSON：git 內部本來就 zlib 壓（~29KB），檔案還保持可讀。
+
+    guard=True：檔數變少不覆蓋（同 fetch_valuation / build_changes 的 archive 慣例）。
+    daily_all 只要上市或上櫃其中一邊活著就是 ok=True，另一邊掛掉時這裡會拿半個市場
+    去蓋掉完整的那次 —— archive 是永久正本，蓋掉就回不來。實際已發生 6 次
+    （2025-06-24、08-13、08-14、2026-06-02、06-08、06-10 上櫃全缺）。
+    回實際寫入的檔數（沒覆蓋則回既有檔數）。"""
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    p = ARCHIVE_DIR / f"{iso}.json"
+    if guard and p.exists():
+        try:
+            old_n = len(json.loads(p.read_text(encoding="utf-8")).get("stocks", {}))
+        except Exception:
+            old_n = 0
+        if len(day) < old_n:
+            print(f"[WARN] archive {iso}: 本次 {len(day)} 檔 < 既有 {old_n} 檔 → 不覆蓋")
+            return old_n
     out = {c: [b["o"], b["h"], b["l"], b["c"], b.get("v") or 0] for c, b in day.items()}
-    (ARCHIVE_DIR / f"{iso}.json").write_text(
-        json.dumps({"d": iso, "stocks": out}, separators=(",", ":")), encoding="utf-8")
+    p.write_text(json.dumps({"d": iso, "stocks": out}, separators=(",", ":")),
+                 encoding="utf-8")
+    return len(day)
 
 
 def rebuild_from_archive(n: int = N_DAYS) -> int:
@@ -173,9 +189,9 @@ def daily_append() -> int:
         stocks[code] = _trim(lst)
         added += 1
 
-    # archive（永久正本）：同日重跑會覆寫同一支，內容一致
+    # archive（永久正本）：同日重跑覆寫同一支，但檔數變少不覆蓋（見 write_day_snapshot）
     if today_day:
-        write_day_snapshot(dd, today_day)
+        write_day_snapshot(dd, today_day, guard=True)
 
     win.update({"ok": True, "data_date": dd, "n_days": N_DAYS, "stocks": stocks})
     save_window(win)
