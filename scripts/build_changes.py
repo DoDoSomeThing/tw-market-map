@@ -18,6 +18,7 @@ from tw_common import DATA_DIR, read_json, tw_now, write_json
 
 STATE_PATH = DATA_DIR / "changes_state.json"
 HIST_NEWS = DATA_DIR / "history_news"
+ARCHIVE_DIR = DATA_DIR / "history_changes"   # 永久 archive：每日「標了誰」，供日後回顧驗證頁算 T+N
 FLIP_MIN_VALUE = 30_000_000   # 外資翻向的估值門檻（3 千萬），投信不設（部位小但指標性高）
 NEWS_MIN = 2                  # 新聞點名門檻（則）
 
@@ -164,14 +165,47 @@ def main() -> None:
     for e in stock_events:
         del e["v"]
 
+    shown = stock_events[:400]
+
+    # ── 永久 archive：每日快照「今天標了誰」──
+    # 站上每天標「今日異動」，但沒人知道標得準不準。事件本身無法事後重算
+    # （mops/營收發布靠當日快照、t86 序列只留 8 日），不當場存就永遠回不來。
+    # 有了這支 + history_ohlc/（268 日 OHLCV 正本）才算得出 T+1/5/20 表現。
+    data_date = daily.get("data_date")
+    n_arch = 0
+    if data_date:
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        # 精簡格式 [t, code, name, txt]，存站上實際顯示的那份（同 400 上限）。
+        snap = {"d": data_date, "n_all": len(stock_events),
+                "events": [[e["t"], e["code"], e["name"], e["txt"]] for e in shown]}
+        p_arch = ARCHIVE_DIR / f"{data_date}.json"
+        # 事件變少不覆蓋：同日重跑若上游（t86/news/mops）掛掉會只剩零星事件，
+        # 拿它去蓋掉完整的那次 = 那天的標記紀錄永久殘缺。
+        old_n = 0
+        if p_arch.exists():
+            try:
+                old_n = len(json.loads(p_arch.read_text(encoding="utf-8")).get("events", []))
+            except Exception:
+                old_n = 0
+        if len(shown) < old_n:
+            n_arch = old_n
+            print(f"[WARN] archive {data_date}: 本次 {len(shown)} 筆 < 既有 {old_n} 筆 → 不覆蓋")
+        else:
+            p_arch.write_text(json.dumps(snap, ensure_ascii=False, separators=(",", ":")),
+                              encoding="utf-8")
+            n_arch = len(shown)
+            print(f"[OK ] archive: history_changes/{data_date}.json（{n_arch} 筆）")
+
     write_json("changes", {
-        "stock_events": stock_events[:400],
+        "stock_events": shown,
         "topic_events": topic_events[:6],
         "market_events": market_events[:4],
         "n_stock_events": len(stock_events),
+        "n_archived": n_arch,
+        "n_history_days": len(list(ARCHIVE_DIR.glob("????-??-??.json"))) if ARCHIVE_DIR.exists() else 0,
         "based_on": {"t86": t86_date, "news": news_date,
                      "mops": mops.get("data_date"), "breadth": br.get("data_date")},
-    }, data_date=daily.get("data_date"),
+    }, data_date=data_date,
         source="t86 序列 + mops + news + revenue + breadth 逐日比對",
         error=None)
     print(f"     個股事件 {len(stock_events)}、題材 {len(topic_events)}、大盤 {len(market_events)}")
