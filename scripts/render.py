@@ -837,6 +837,21 @@ function openStock(code) {
   const bh = DATA.tdcc.ok ? (DATA.tdcc.data.by_code || {})[code] : null;
   const bhDelta = bh && bh[2] != null
     ? ` <span class="${cls(bh[2])}">${bh[2] > 0 ? "+" : ""}${bh[2]}pp</span>` : "";
+  // 融資（張）／當沖比（%）：TWSE 僅公布上市，上櫃整段不顯示（顯示「—」會被誤讀成資料掉了）。
+  // by_code 是全量表；舊資料（by_code 尚未產出的那幾天）退回掃 top30 榜單，查不到才「—」。
+  const isTpex = r[5] === "o";
+  const mg = DATA.margin.ok ? DATA.margin.data : null;
+  let mgv = mg && mg.by_code ? mg.by_code[code] : null;
+  if (!mgv && mg) {
+    const hit = [...(mg.inc || []), ...(mg.dec || [])].find(x => x.code === code);
+    if (hit) mgv = [hit.bal, hit.chg];
+  }
+  const dt = DATA.daytrade.ok ? DATA.daytrade.data : null;
+  let dtr = dt && dt.by_code ? dt.by_code[code] : null;
+  if (dtr == null && dt) {
+    const hit = (dt.list || []).find(x => x.code === code);
+    if (hit) dtr = hit.ratio;
+  }
   // 同題材相對位置：這檔在所屬題材裡的漲幅名次（我們獨有的角度）
   let rankBadges = "";
   if (DATA.topics_view.ok) {
@@ -873,12 +888,16 @@ function openStock(code) {
           ${cell("殖利率", va.yield_ex != null ? va.yield_ex + "%" : (f.yield_pct != null ? f.yield_pct + "%" : "—"))}
           ${bh ? cell("大戶 400張+", `${bh[0]}%${bhDelta}`) + cell("千張大戶", bh[1] + "%")
                  + cell("股東人數", bh[3] ? bh[3].toLocaleString() : "—") : ""}
+          ${isTpex ? "" : cell("融資餘額", mgv ? mgv[0].toLocaleString() + " 張" : "—")
+                 + cell("融資增減", mgv ? `<span class="${cls(mgv[1])}">${mgv[1] > 0 ? "+" : ""}${mgv[1].toLocaleString()}</span> 張` : "—")
+                 + cell("當沖比", dtr != null ? dtr + "%" : "—")}
           ${dv ? cell("最後買進日", dv.last_buy ? `<b>${dv.last_buy.slice(5).replace("-", "/")}</b>` : "—")
                + cell("預計除息", `<span class="up">${dv.ex_date.slice(5).replace("-", "/")}</span>`)
                + cell("本次現金", dv.cash != null ? dv.cash + " 元" : "待公告") : ""}
           ${rv ? cell("當月營收", rv[0] + " 億") + cell("營收 YoY", rv[1] != null ? (rv[1] > 0 ? "+" : "") + rv[1] + "%" : "—")
                + cell("營收 MoM", rv[2] != null ? (rv[2] > 0 ? "+" : "") + rv[2] + "%" : "—") : ""}
         </div>
+        ${isTpex ? `<div class="sub" style="padding:2px 0 0">融資／當沖：TWSE 僅公布上市，上櫃無資料</div>` : ""}
         <div id="sp-inst"></div>
         <div id="sp-tdcc"></div>
         ${rankBadges}

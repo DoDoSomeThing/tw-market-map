@@ -57,8 +57,13 @@ def main() -> None:
     inc = sorted(rated, key=lambda x: x["chg"], reverse=True)[:TOP]
     dec = sorted(rated, key=lambda x: x["chg"])[:TOP]
 
+    # 全量 by_code [餘額, 增減]（張）：inc/dec 只有 top 30，個股面板要查任一檔都得有值。
+    # 精簡成陣列省 payload（~1200 檔約 25KB，內嵌進 index.html）。
+    by_code = {c: [v["bal"], v["chg"]] for c, v in stocks.items()}
+
     date_iso = ymd_to_iso(str(j.get("date"))) or (daily.get("data_date"))
-    write_json("margin", {"inc": inc, "dec": dec, "n": len(stocks), "min_bal": MIN_BAL},
+    write_json("margin", {"inc": inc, "dec": dec, "by_code": by_code,
+                          "n": len(stocks), "min_bal": MIN_BAL},
                data_date=date_iso, source="TWSE MI_MARGN（個股融資餘額，上市）")
 
 

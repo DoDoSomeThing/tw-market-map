@@ -36,6 +36,7 @@ def main() -> None:
             meta[s["code"]] = s
 
     rows = []
+    by_code = {}    # 全量 {code: 當沖比%}：list 只有 top 30，個股面板要查任一檔都得有值
     for row in table["data"]:
         code = (row[0] or "").strip()
         m = meta.get(code)
@@ -45,9 +46,12 @@ def main() -> None:
         vol = m.get("value") and m.get("vol")
         if not dt_shares or not vol or vol <= 0:
             continue
+        ratio = min(dt_shares / vol * 100, 100)   # 當沖比%
+        by_code[code] = round(ratio, 1)
+        # 排行榜濾小量（成交值 <5000 萬時當沖比分母小、比率容易失真）；by_code 不濾，
+        # 面板顯示時另標註成交值供判讀。
         if (m.get("value") or 0) < MIN_VALUE:
             continue
-        ratio = min(dt_shares / vol * 100, 100)   # 當沖比%
         rows.append({"code": code, "name": (row[1] or "").strip() or code,
                      "industry": m.get("industry") or "", "pct": m.get("pct"),
                      "close": m.get("close"), "ratio": round(ratio, 1),
@@ -59,7 +63,7 @@ def main() -> None:
 
     rows.sort(key=lambda x: x["ratio"], reverse=True)
     date_iso = ymd_to_iso(str(j.get("date"))) or daily.get("data_date")
-    write_json("daytrade", {"list": rows[:TOP], "min_value": MIN_VALUE},
+    write_json("daytrade", {"list": rows[:TOP], "by_code": by_code, "min_value": MIN_VALUE},
                data_date=date_iso, source="TWSE TWTB4U（當日沖銷交易，上市）")
 
     # 追加今日大盤當沖比進趨勢序列（歷史由 backfill_daytrade.py 種；此處每日 upsert 今天）
