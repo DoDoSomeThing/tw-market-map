@@ -15,6 +15,9 @@ from tw_common import DATA_DIR, read_json, write_json
 WINDOW_PATH = DATA_DIR / "ohlc_window.json.gz"
 SERIES_N = 80        # 給前端畫布林通道圖的收盤序列長度（60 日圖 + 20 日 MA20 暖機）
 SERIES_MIN = 25      # 少於此根數不給序列（畫不出通道）
+BARS_52W = 252       # 52 週 = 252 個交易日。不可用整個視窗算——N_DAYS 是 300，
+                     # 直接 max(highs) 會變成跨 1.19 年的「52 週」高低。
+MIN_52W = 120        # 少於此根數不給 pos52w（新上市股拿 3 個月區間當 52 週會誤導）
 
 
 def back_adjust(bars: list[dict], evs: list[dict]) -> tuple[list[dict], int]:
@@ -143,11 +146,12 @@ def ta_for(bars: list[dict], evs: list[dict] | None = None) -> dict | None:
         if avg > 0 and vols[-1]:
             vol_ratio = round(vols[-1] / avg, 2)
 
-    # 52 週位置（視窗內最多 260 日高低）
+    # 52 週位置：固定取最近 BARS_52W 根，不吃整個視窗（視窗上限 300 根 ≈ 1.19 年）
     pos52w = None
-    hi, lo = max(highs), min(lows)
-    if hi > lo:
-        pos52w = round((close - lo) / (hi - lo), 2)
+    if len(closes) >= MIN_52W:
+        hi, lo = max(highs[-BARS_52W:]), min(lows[-BARS_52W:])
+        if hi > lo:
+            pos52w = round((close - lo) / (hi - lo), 2)
 
     kd_series = compute_kd(highs, lows, closes)
     kd = None

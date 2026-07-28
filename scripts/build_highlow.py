@@ -1,6 +1,7 @@
 # build_highlow.py — 創 52 週新高/新低清單（純規則、零 API）
 # 讀 ta(pos52w) + daily_all(名稱/漲跌/成交值) → data/highlow.json
-# pos52w = (收盤−52週低)/(52週高−52週低)；≥0.98 近高、≤0.02 近低。
+# pos52w = (收盤−52週低)/(52週高−52週低)，取最近 252 個交易日；≥0.95 近高、≤0.05 近低。
+# 上市未滿 120 個交易日的個股 ta 不給 pos52w（區間太短，稱不上 52 週）→ 自然不會進榜。
 from __future__ import annotations
 
 from tw_common import read_json, write_error, write_json
