@@ -2,7 +2,8 @@
 #
 # 讀 data/ohlc_window.json.gz → 算 §SPEC 指標 → data/ta.json（信封）→ 部署時 render 複製到 docs/。
 # 指標：MA20/60/240、站上/跌破、距年線乖離、量比、52週位置、KD、RSI14、訊號旗標。
-# 用原始收盤（不做除權還原）；除權息日前後均線/乖離失真屬已知，前端 note 標明。
+# 指標用後復權收盤：除權息走 exrights 官方因子、分割／減資走 ±15% 跳空偵測（見 adjusted()）。
+# 面板顯示的現價仍是原始收盤（今日因子=1，兩者一致）。
 # 不足天數的指標 → null，前端顯示「—」。
 from __future__ import annotations
 
@@ -40,6 +41,48 @@ def back_adjust(bars: list[dict], evs: list[dict]) -> tuple[list[dict], int]:
             for k in ("o", "h", "l", "c"):
                 out[i][k] = out[i][k] * cum
     return out, applied
+
+
+# 台股單日漲跌幅上限 ±10% → 收盤對收盤跳動超過此門檻必是公司行為，不可能是正常交易。
+# 留 15% 餘裕給「跌停後隔日漲停」這種極端但合法的組合。
+SPLIT_TH_LO, SPLIT_TH_HI = 0.85, 1.15
+
+
+def split_adjust(bars: list[dict]) -> tuple[list[dict], int]:
+    """殘差後復權：抹平 exrights 蓋不到的跳空（股票分割、反分割、減資）。
+
+    exrights 來源是 TWSE「除權除息計算結果」，**不含股票分割**。實例：0050 於
+    2025-06-18 做 1:4 分割（188.65 → 47.57），exrights 裡只有三筆除息、沒有這筆
+    → 不處理的話 MA/布林/KD/pos52w 全把它當 -75% 崩盤。實測 260 根視窗內，
+    套完 exrights 仍有 129 檔殘留斷點（6919、8422 還因此被誤列進「逼近 52 週低」榜）。
+
+    只在偵測到斷點時複製 bars（呼叫端的 window dict 不能被就地改壞）。
+    回 (bars, 斷點數)。
+    """
+    hits = [i for i in range(1, len(bars))
+            if bars[i - 1].get("c") and bars[i - 1]["c"] > 0 and bars[i].get("c")
+            and not (SPLIT_TH_LO <= bars[i]["c"] / bars[i - 1]["c"] <= SPLIT_TH_HI)]
+    if not hits:
+        return bars, 0
+    out = [dict(b) for b in bars]
+    for i in hits:
+        r = out[i]["c"] / out[i - 1]["c"]
+        for j in range(i):
+            for k in ("o", "h", "l", "c"):
+                if out[j].get(k):
+                    out[j][k] *= r
+            if out[j].get("v"):
+                out[j]["v"] /= r        # 價乘 r → 股數除 r，成交金額守恆
+    return out, len(hits)
+
+
+def adjusted(bars: list[dict], evs: list[dict] | None) -> tuple[list[dict], int, int]:
+    """完整後復權 = 除權息（exrights，有官方因子）+ 分割／減資（殘差偵測）。
+    順序不能反：先抹掉能精確算的除權息，剩下的跳空才確定是分割類。
+    回 (bars, 除權息次數, 分割次數)。"""
+    out, ex_n = back_adjust(bars, evs or [])
+    out, sp_n = split_adjust(out)
+    return out, ex_n, sp_n
 
 
 def sma(vals: list[float], n: int) -> float | None:
@@ -125,7 +168,7 @@ def ta_for(bars: list[dict], evs: list[dict] | None = None) -> dict | None:
     if len(bars) < 2:
         return None
     # 後復權下今日因子=1 → closes[-1] 仍是原始收盤，與面板顯示的現價一致（比較不會錯位）
-    bars, adj_n = back_adjust(bars, evs or [])
+    bars, adj_n, split_n = adjusted(bars, evs)
     closes = [b["c"] for b in bars]
     highs = [b["h"] for b in bars]
     lows = [b["l"] for b in bars]
@@ -208,6 +251,7 @@ def ta_for(bars: list[dict], evs: list[dict] | None = None) -> dict | None:
         "vol_ratio": vol_ratio, "pos52w": pos52w,
         "kd": kd, "rsi14": rsi14, "macd": macd, "signals": sig,
         "adj_n": adj_n,     # 視窗內套用的除權息次數（0=無事件或無資料源；前端可標「已還原 N 次」）
+        "split_n": split_n,  # 視窗內偵測到的分割／減資跳空數（exrights 蓋不到、靠 ±15% 規則抓）
     }
 
 
@@ -237,7 +281,7 @@ def main() -> None:
         t = ta_for(bars, evs)
         if t is not None:
             stocks[code] = t
-            adj, _ = back_adjust(bars, evs or [])
+            adj, _, _ = adjusted(bars, evs)
             if len(adj) >= SERIES_MIN:
                 closes80[code] = [round(b["c"], 2) for b in adj[-SERIES_N:]]
 
@@ -248,14 +292,18 @@ def main() -> None:
                error=None if closes80 else "無足夠序列")
 
     n_adj = sum(1 for t in stocks.values() if t["adj_n"] > 0)
+    n_split = sum(1 for t in stocks.values() if t["split_n"] > 0)
     note = ("描述性技術狀態；訊號僅供參考、非買賣建議。"
-            "指標用後復權價（除權息跳空已抹平）；上市有完整除權息歷史，"
+            "指標用後復權價（除權息 + 股票分割／減資的跳空都已抹平）；上市有完整除權息歷史，"
             "上櫃無歷史源（僅每日累積），故上櫃早期除權息仍可能小幅失真。"
+            "分割／減資無官方因子表，以「單日跳動 >±15%（台股日限 ±10%）必為公司行為」偵測。"
             "面板顯示的現價為原始收盤。")
-    write_json("ta", {"stocks": stocks, "note": note, "n_adjusted": n_adj},
-               data_date=data_date, source="ohlc_window 計算 + exrights 後復權",
+    write_json("ta", {"stocks": stocks, "note": note,
+                      "n_adjusted": n_adj, "n_split_adjusted": n_split},
+               data_date=data_date, source="ohlc_window 計算 + exrights 後復權 + 分割還原",
                error=None if stocks else "視窗無足夠資料")
-    print(f"[OK ] data/ta.json（{len(stocks)} 檔，其中 {n_adj} 檔套用過除權息還原）")
+    print(f"[OK ] data/ta.json（{len(stocks)} 檔，其中 {n_adj} 檔套用除權息還原、"
+          f"{n_split} 檔套用分割／減資還原）")
 
 
 if __name__ == "__main__":
