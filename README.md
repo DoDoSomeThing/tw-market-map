@@ -1,6 +1,8 @@
 # tw-market-map — 自用台股產業地圖
 
-仿 aistockmap.com 的自用台股儀表板。GitHub Actions 每交易日收盤後抓免費公開資料，產靜態 JSON + 單頁 HTML，掛 GitHub Pages。（排程設 17:30，但 Actions 免費排程實測平均遲到 ~134 分 → 實際更新約 19:00–20:30。）
+網址：https://dodosomething.github.io/tw-market-map/
+
+GitHub Actions 每交易日收盤後抓免費公開資料，產靜態 JSON + 單頁 HTML，掛 GitHub Pages。（排程設 17:30，但 Actions 免費排程實測平均遲到 ~134 分 → 實際更新約 19:00–20:30。）
 
 **定位：只做現況呈現，不做預測。** 省看盤時間，不是找明牌。
 
@@ -12,7 +14,7 @@
 - **P4 價值鏈**：產業價值鏈（3 鏈）＋個股直連 kanpan 面板（`?sid=`）
 - **法人資金流**：法人買賣超聚合到產業/題材
 - **P5 基本面深度＋市場新聞聚合**
-- **P6 分頁式改版**：仿 aistockmap 版型（vanilla 重刻，未搬其程式碼）
+- **P6 分頁式改版**（vanilla 重刻）
 - **P7 市場寬度＋營收亮點＋日期回看＋全站搜尋**
 - 個股點擊開 Yahoo 股市頁；MOPS 資料有防倒退守門
 
