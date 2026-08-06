@@ -3,12 +3,38 @@
 # 融資增減(張) = 今日餘額 − 前日餘額。僅上市（TPEx 上櫃為另一端點，暫不含）。
 from __future__ import annotations
 
-from tw_common import (http_get_json, parse_num, read_json, write_error,
-                       write_json, ymd_to_iso)
+from tw_common import (col_index, http_get_json, parse_num, read_json,
+                       write_error, write_json, ymd_to_iso)
 
 MARGN_ALL_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?selectType=ALL&response=json"
 TOP = 30
 MIN_BAL = 500   # 今日餘額 ≥500 張才列，濾極小融資標的雜訊
+
+
+def margin_cols(fields: list) -> dict | None:
+    """個股融資融券表 → {代號, 名稱, 前日餘額, 今日餘額} 的欄位索引。欄位改版回 None。
+
+    ⚠️ 這張表的欄位名稱**會重複**：融資段與融券段都叫「買進/賣出/前日餘額/今日餘額」——
+    直接用 {name: i} 建表會被後段的融券蓋掉，抓出來的「融資餘額」其實是融券餘額。
+    所以用兩個唯一名稱當錨點：「現金償還」（融資段）與「現券償還」（融券段），
+    只在這兩者之間找餘額欄。
+
+    2026-08-06 實測欄序：
+    代號 名稱 買進 賣出 現金償還 前日餘額 今日餘額 次一營業日限額
+    買進 賣出 現券償還 前日餘額 今日餘額 次一營業日限額 資券互抵 註記
+    """
+    i_cash = col_index(fields, "現金償還")          # 融資段起點錨
+    if i_cash is None:
+        return None
+    i_bond = col_index(fields, "現券償還", start=i_cash + 1)  # 融券段起點錨
+    end = i_bond if i_bond is not None else len(fields)
+    cols = {
+        "代號": col_index(fields, "代號", "股票代號", end=i_cash),
+        "名稱": col_index(fields, "名稱", "股票名稱", end=i_cash),
+        "前日餘額": col_index(fields, "前日餘額", start=i_cash + 1, end=end),
+        "今日餘額": col_index(fields, "今日餘額", start=i_cash + 1, end=end),
+    }
+    return cols if all(v is not None for v in cols.values()) else None
 
 
 def main() -> None:
@@ -28,6 +54,13 @@ def main() -> None:
         write_error("margin", "TWSE MI_MARGN ALL", "找不到個股融資融券表")
         return
 
+    cols = margin_cols(table.get("fields") or [])
+    if not cols:
+        write_error("margin", "TWSE MI_MARGN ALL",
+                    f"欄位改版，拒絕用位置硬猜：{table.get('fields')}")
+        return
+    need = max(cols.values())
+
     daily = read_json("daily_all")
     meta = {}
     if daily.get("ok"):
@@ -36,16 +69,18 @@ def main() -> None:
 
     stocks = {}
     for row in table["data"]:
-        code = (row[0] or "").strip()
+        if len(row) <= need:
+            continue                  # 說明/合計等短列
+        code = (row[cols["代號"]] or "").strip()
         if len(code) != 4 or not code.isdigit():
             continue
-        prev = parse_num(row[5])      # 融資前日餘額（張）
-        today = parse_num(row[6])     # 融資今日餘額（張）
+        prev = parse_num(row[cols["前日餘額"]])    # 融資前日餘額（張）
+        today = parse_num(row[cols["今日餘額"]])   # 融資今日餘額（張）
         if prev is None or today is None:
             continue
         chg = today - prev
         m = meta.get(code, {})
-        stocks[code] = {"name": (row[1] or "").strip() or code, "bal": int(today),
+        stocks[code] = {"name": (row[cols["名稱"]] or "").strip() or code, "bal": int(today),
                         "chg": int(chg), "pct": m.get("pct"), "close": m.get("close"),
                         "industry": m.get("industry") or ""}
 

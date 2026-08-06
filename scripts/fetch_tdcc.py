@@ -12,7 +12,7 @@ import subprocess
 
 import requests
 
-from tw_common import DATA_DIR, UA, read_json, write_error, write_json, ymd_to_iso
+from tw_common import DATA_DIR, UA, col_index, read_json, write_error, write_json, ymd_to_iso
 
 TDCC_URL = "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5"
 HISTORY_DIR = DATA_DIR / "history_tdcc"
@@ -50,12 +50,28 @@ def parse(text: str) -> tuple[dict, str]:
     header = next(reader, None)
     if not header or "持股分級" not in ",".join(header):
         raise RuntimeError(f"CSV 表頭不符：{header}")
+    # 用表頭名稱定位，不吃欄序（2026-08-06 實測：
+    # 資料日期 證券代號 持股分級 人數 股數 占集保庫存數比例%；第一欄帶 BOM）
+    cols = {
+        "date": col_index(header, "資料日期"),
+        "code": col_index(header, "證券代號"),
+        "level": col_index(header, "持股分級"),
+        "holders": col_index(header, "人數"),
+        "ratio": col_index(header, "占集保庫存數比例%", "占集保庫存數比例", "比例"),
+    }
+    if any(v is None for v in cols.values()):
+        raise RuntimeError(f"CSV 欄位改版，拒絕用位置硬猜：{header}")
+    need = max(cols.values())
     stocks: dict[str, dict] = {}
     data_date = ""
     for row in reader:
-        if len(row) < 6:
+        if len(row) <= need:
             continue
-        d8, code, level, holders, _shares, ratio = row[0], row[1].strip(), row[2].strip(), row[3], row[4], row[5]
+        d8 = row[cols["date"]]
+        code = row[cols["code"]].strip()
+        level = row[cols["level"]].strip()
+        holders = row[cols["holders"]]
+        ratio = row[cols["ratio"]]
         if len(code) != 4 or not code.isdigit():
             continue
         data_date = data_date or d8

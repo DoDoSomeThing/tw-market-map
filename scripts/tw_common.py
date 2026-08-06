@@ -122,6 +122,31 @@ def parse_num(s) -> float | None:
         return None
 
 
+# ── 欄位定位（別寫死 row[數字]）──
+
+def col_index(fields, *names, start: int = 0, end: int | None = None) -> int | None:
+    """在 fields[start:end] 找欄位位置：先試完全相等，再退前綴比對（如「買進金額(元)」比對「買進」）。
+
+    找不到回 None —— 呼叫端要當「欄位改版」報錯，**不要退回用位置硬猜**。
+    2026-07-28 當沖比就是 fetch_daytrade 寫死 row[3]，TWSE 欄數一變整支 IndexError、
+    空殼上線一整天；比那更糟的是位置還對得到但意義變了，會靜默寫出錯的數字。
+    """
+    if not fields:
+        return None
+    hi = len(fields) if end is None else min(end, len(fields))
+    window = range(max(start, 0), hi)
+    cleaned = [str(f or "").replace("﻿", "").strip() for f in fields]
+    for name in names:
+        for i in window:
+            if cleaned[i] == name:
+                return i
+    for name in names:
+        for i in window:
+            if cleaned[i].startswith(name):
+                return i
+    return None
+
+
 # ── 資料新鮮度守門 ──
 
 def data_age_days(data_date: str) -> int | None:

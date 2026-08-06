@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 import json
 
-from tw_common import (DATA_DIR, data_age_days, http_get_json, parse_num, read_json, roc_to_iso, tw_today, write_error, write_json, ymd_to_iso)
+from tw_common import (DATA_DIR, col_index, data_age_days, http_get_json, parse_num, read_json, roc_to_iso, tw_today, write_error, write_json, ymd_to_iso)
 
 # 永久 archive（append-only，2026-07-17 起）：每日大盤法人/資券精簡快照。
 # 目的：畫「近兩週三大法人買賣超 / 融資增減」趨勢柱狀圖——原本 market.json 每天覆蓋、
@@ -60,10 +60,22 @@ def fetch_tpex_inst() -> dict | None:
         if not tables or not tables[0].get("data"):
             continue
         t = tables[0]
+        # 欄位名稱定位（2026-08-06 實測：單位名稱 / 買進金額(元) / 賣出金額(元) / 買賣超(元)）
+        f = t.get("fields") or []
+        c_name = col_index(f, "單位名稱", "單位")
+        c_buy = col_index(f, "買進金額(元)", "買進")
+        c_sell = col_index(f, "賣出金額(元)", "賣出")
+        c_net = col_index(f, "買賣超(元)", "買賣超")
+        if None in (c_name, c_buy, c_sell, c_net):
+            raise RuntimeError(f"TPEx 法人欄位改版：{f}")
+        need = max(c_name, c_buy, c_sell, c_net)
         rows = {}
         for row in t["data"]:
-            name = str(row[0]).strip()
-            rec = {"buy": parse_num(row[1]), "sell": parse_num(row[2]), "net": parse_num(row[3])}
+            if len(row) <= need:
+                continue
+            name = str(row[c_name]).strip()
+            rec = {"buy": parse_num(row[c_buy]), "sell": parse_num(row[c_sell]),
+                   "net": parse_num(row[c_net])}
             if name == "外資及陸資合計":
                 rows["foreign"] = rec
             elif name == "投信":
@@ -90,12 +102,27 @@ def fetch_margin() -> dict | None:
             break
     if not table:
         return None
+    # 欄位名稱定位（2026-08-06 實測：項目 / 買進 / 賣出 / 現金(券)償還 / 前日餘額 / 今日餘額）
+    f = table.get("fields") or []
+    cols = {
+        "item": col_index(f, "項目"),
+        "buy": col_index(f, "買進"),
+        "sell": col_index(f, "賣出"),
+        "redeem": col_index(f, "現金(券)償還", "現金"),
+        "prev_bal": col_index(f, "前日餘額"),
+        "today_bal": col_index(f, "今日餘額"),
+    }
+    if any(v is None for v in cols.values()):
+        raise RuntimeError(f"信用交易統計欄位改版：{f}")
+    need = max(cols.values())
     out = {}
     for row in table.get("data", []):
-        item = str(row[0])
-        rec = {"buy": parse_num(row[1]), "sell": parse_num(row[2]),
-               "redeem": parse_num(row[3]), "prev_bal": parse_num(row[4]),
-               "today_bal": parse_num(row[5])}
+        if len(row) <= need:
+            continue
+        item = str(row[cols["item"]])
+        rec = {"buy": parse_num(row[cols["buy"]]), "sell": parse_num(row[cols["sell"]]),
+               "redeem": parse_num(row[cols["redeem"]]), "prev_bal": parse_num(row[cols["prev_bal"]]),
+               "today_bal": parse_num(row[cols["today_bal"]])}
         if item.startswith("融資金額"):
             out["margin_value"] = rec  # 仟元
         elif item.startswith("融資"):
@@ -115,7 +142,12 @@ def main() -> None:
         twse = None
         twse_err = str(e)
 
-    tpex = fetch_tpex_inst()  # 允許失敗（上櫃區顯示 ⚠️）
+    try:
+        tpex = fetch_tpex_inst()  # 允許失敗（上櫃區顯示 ⚠️）
+        tpex_err = None if tpex else "抓取失敗"
+    except Exception as e:        # 欄位改版等 → 只掛掉上櫃區，上市法人與資券照寫
+        tpex = None
+        tpex_err = str(e)
 
     try:
         margin = fetch_margin()
@@ -140,7 +172,7 @@ def main() -> None:
 
     errs = [x for x in (
         f"上市法人:{twse_err}" if twse_err else None,
-        "上櫃法人:抓取失敗" if tpex is None else None,
+        f"上櫃法人:{tpex_err}" if tpex_err else None,
         f"資券:{margin_err}" if margin_err else None,
     ) if x]
     date_ = (twse or {}).get("date") or (margin or {}).get("date")
