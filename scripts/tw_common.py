@@ -37,14 +37,27 @@ _last_fetch = [0.0]
 
 
 def _curl_get_json(url: str, timeout: int):
-    """requests SSL 失敗時的備援（Mac LibreSSL 對 TPEx 部分節點憑證過度嚴格；curl 走系統信任鏈）。"""
+    """requests SSL 失敗時的備援（Mac LibreSSL 對 TPEx 部分節點憑證過度嚴格；curl 走系統信任鏈）。
+
+    2026-08-06 修：原本 text=True 沒指定 encoding，Windows 會用 cp950 解 curl 的輸出，
+    中文 JSON 一定 UnicodeDecodeError → 讀取執行緒死掉、stdout 變空 → 噴
+    `RuntimeError: curl exit=0`（訊息還騙人，0 是成功）。等於這條備援在 Windows 上是死的。
+    Mac / CI 是 UTF-8 locale 才一直沒發作。改收 bytes 自己解 UTF-8。
+    """
     import subprocess
     r = subprocess.run(
         ["curl", "-s", "--max-time", str(timeout), "-H", f"User-Agent: {UA['User-Agent']}", url],
-        capture_output=True, text=True)
-    if r.returncode != 0 or not r.stdout:
-        raise RuntimeError(f"curl exit={r.returncode}")
-    return json.loads(r.stdout)
+        capture_output=True)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode("utf-8", "replace")[:200].strip()
+        raise RuntimeError(f"curl 失敗 exit={r.returncode} stderr={err!r}")
+    if not r.stdout:
+        raise RuntimeError("curl 回傳空 body（exit=0）")
+    body = r.stdout.decode("utf-8", "replace")
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"curl 回應非 JSON：{e}；len={len(body)} body[:200]={body[:200]!r}") from e
 
 
 def _describe(r) -> str:
