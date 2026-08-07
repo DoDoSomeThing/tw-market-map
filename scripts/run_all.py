@@ -19,6 +19,8 @@ SCRIPTS = [
     "fetch_tdcc.py",
     "build_tdcc_view.py",    # 大戶級距×期間對比 → data/tdcc_view.json（吃 history_tdcc 快照）
     "fetch_fundamentals.py",
+    "fetch_fin_history.py",   # 歷史季報 archive（MOPS t163sb04）— 首次須手動 --seed
+    "build_fin_growth.py",    # TTM EPS 年增率／毛利率年增差 → data/fin_growth.json
     "fetch_valuation.py",   # PE/PB/市值（交易所每日公布值）
     "fetch_dividend.py",
     "fetch_news.py",
@@ -39,6 +41,7 @@ SCRIPTS = [
     "build_highlow.py",   # 逼近 52 週高/低（純規則、讀 ta pos52w）
     "build_sentiment.py", # 大盤情緒曲線（純規則、讀 history 快照收盤比對）
     "build_turnover.py",  # 成交值週轉率榜（純規則、讀 daily_all + valuation）
+    "build_health.py",    # 四燈號健診卡（純規則、讀 ta/valuation/fin_growth/revenue/margin + archive）
     "render.py",
 ]
 

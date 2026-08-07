@@ -223,6 +223,54 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 12px 12px; }
   background: linear-gradient(90deg, rgba(48,209,88,.5) 0 20%, rgba(125,138,160,.25) 20% 70%, rgba(255,69,58,.5) 70% 100%); }
 .gauge-dot { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px; background: var(--fg); transform: translateX(-50%); }
 
+/* 四燈號健診卡（個股面板）
+   配色照台股邏輯：**紅=強、綠=弱**（跟全站漲跌同一套語意，不必再切換腦袋）。
+   仍另外命名 --hc-strong/--hc-weak 而不直接吃 --up/--down：健診的紅是「基本面強」，
+   漲跌的紅是「今天漲」，兩者只是碰巧同色，語意不同；分開才不會哪天改漲跌配色時被連坐。 */
+:root { --hc-strong: #ff453a; --hc-mid: #f59e0b; --hc-weak: #30d158;
+  --hc-strong-s: rgba(255,69,58,.10); --hc-mid-s: rgba(245,158,11,.10); --hc-weak-s: rgba(48,209,88,.10); }
+:root[data-theme=light] { --hc-strong: #d70015; --hc-mid: #b45309; --hc-weak: #16a34a;
+  --hc-strong-s: rgba(215,0,21,.06); --hc-mid-s: rgba(180,83,9,.07); --hc-weak-s: rgba(22,163,74,.07); }
+.hc-wrap { margin: 10px 0 4px; }
+/* 標頭：拿掉藍色漸層底（太重、跟頁面其他區塊搶焦點），改成分數自己當主角——
+   一條細下框線 + 一個大號數字。說明搬到卡片下方小字（原本擠在藍條裡會撐成 3 行、122px 高）*/
+.hc-top { display: flex; align-items: baseline; gap: 10px; white-space: nowrap;
+  padding: 2px 2px 9px; border-bottom: 1px solid var(--border); }
+.hc-top b { font-size: .92rem; color: var(--head); }
+.hc-top .hc-sub { font-size: .72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.hc-top .hc-tot { margin-left: auto; font-family: var(--num); font-size: 2.7rem; font-weight: 800;
+  line-height: .92; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.hc-top .hc-tot small { font-size: .8rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.hc-tot.s { color: var(--hc-strong); } .hc-tot.m { color: var(--hc-mid); } .hc-tot.w { color: var(--hc-weak); }
+.hc-foot { color: var(--muted); font-size: .72rem; margin-top: 7px; line-height: 1.5; }
+.hc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 760px) { .hc-grid { grid-template-columns: 1fr; } }
+.hc-face { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: var(--surface); }
+.hc-face.s { border-color: var(--hc-strong); } .hc-face.m { border-color: var(--hc-mid); } .hc-face.w { border-color: var(--hc-weak); }
+.hc-fhd { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: .86rem; font-weight: 700; }
+.hc-face.s .hc-fhd { background: var(--hc-strong-s); } .hc-face.m .hc-fhd { background: var(--hc-mid-s); }
+.hc-face.w .hc-fhd { background: var(--hc-weak-s); }
+/* 燈號：原本 9px 純色點被旁邊的 emoji 蓋過去（使用者反應「沒看到燈號」）→
+   放大到 14px、加外圈光暈與內高光，做成真的號誌燈；emoji 圖示同時拿掉，讓燈號是唯一焦點。*/
+.hc-dot { width: 14px; height: 14px; border-radius: 50%; flex: none;
+  box-shadow: 0 0 0 3px var(--hc-ring, transparent), inset 0 1px 1px rgba(255,255,255,.45); }
+.hc-face.s .hc-dot { background: var(--hc-strong); --hc-ring: var(--hc-strong-s); }
+.hc-face.m .hc-dot { background: var(--hc-mid); --hc-ring: var(--hc-mid-s); }
+.hc-face.w .hc-dot { background: var(--hc-weak); --hc-ring: var(--hc-weak-s); }
+.hc-face.n .hc-dot { background: var(--bar-flat); }
+.hc-fsc { margin-left: auto; font-family: var(--num); font-weight: 800; font-size: 1.45rem;
+  line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.hc-fsc small { font-size: .72rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.hc-face.s .hc-fsc { color: var(--hc-strong); } .hc-face.m .hc-fsc { color: var(--hc-mid); }
+.hc-face.w .hc-fsc { color: var(--hc-weak); }
+.hc-item { padding: 7px 10px; border-top: 1px solid var(--border); }
+.hc-line { display: flex; align-items: baseline; gap: 6px; font-size: .84rem; }
+.hc-line .hc-w { color: var(--muted); font-size: .74rem; font-family: var(--num); }
+.hc-line .hc-v { margin-left: auto; font-family: var(--num); font-weight: 600; }
+.hc-v.s { color: var(--hc-strong); } .hc-v.m { color: var(--hc-mid); } .hc-v.w { color: var(--hc-weak); }
+.hc-v.n { color: var(--muted); font-weight: 400; }
+.hc-rule { color: var(--muted); font-size: .7rem; margin-top: 2px; letter-spacing: .01em; }
+
 /* 營收亮點卡 */
 .rev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 9px; }
 .rev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; font-size: .84rem; line-height: 1.55; cursor: pointer; transition: border-color var(--tr), box-shadow var(--tr); }
@@ -436,6 +484,12 @@ tr:last-child td { border-bottom: none; }
 .star { cursor: pointer; color: var(--muted); font-size: 1rem; background: none; border: none; font-family: inherit; padding: 0 4px; line-height: 1; transition: color var(--tr), transform var(--tr); }
 .star:hover { transform: scale(1.15); }
 .star.on { color: var(--warn); }
+/* 個股面板：Yahoo 外連放在股名旁（原本墊在右欄最底下，要捲到底才看得到）*/
+.sp-yahoo { margin-left: 6px; font-size: .74rem; font-weight: 500; color: var(--accent);
+  text-decoration: none; white-space: nowrap; vertical-align: 1px;
+  border: 1px solid var(--border-hi); border-radius: 999px; padding: 2px 8px;
+  transition: border-color var(--tr), background var(--tr); }
+.sp-yahoo:hover { border-color: var(--accent); background: var(--accent-soft); }
 .wl-news { color: var(--muted); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 #sp-overlay { position: fixed; inset: 0; background: rgba(2,4,9,.62); z-index: 90; display: none; animation: fadeIn .22s var(--ease); }
 #sp-panel { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border-hi); border-radius: 14px; padding: 15px; display: none; box-shadow: var(--shadow); animation: spIn .3s var(--ease); }
@@ -870,9 +924,11 @@ function openStock(code) {
   panelEl.innerHTML = `
     <button class="sp-close" onclick="spClose()">✕</button>
     <h3>${r[1]} <span class="sub">${code}${r[2] ? "・" + r[2] : ""}</span>
-      <button class="star ${wlHas(code) ? "on" : ""}" data-code="${code}" onclick="wlToggle('${code}')">★</button></h3>
+      <button class="star ${wlHas(code) ? "on" : ""}" data-code="${code}" onclick="wlToggle('${code}')">★</button>
+      <a class="sp-yahoo" href="${yahoo}" target="_blank" rel="noopener">Yahoo 股市 ↗</a></h3>
     <div><span class="px ${cls(r[4])}" style="font-size:1.3rem;font-weight:700">${r[3]}</span>
       <span class="${cls(r[4])}">（${sign(r[4])}%）</span> <span id="sp-spark" style="margin-left:8px"></span></div>
+    <div id="sp-health"></div>
     <div class="sp-two">
       <div class="sp-col">
         <div class="sp-colhd">基本資料 · 法人</div>
@@ -907,7 +963,6 @@ function openStock(code) {
       <div class="sp-col">
         <div id="sp-ta"></div>
         ${badges.trim() ? `<div style="padding:6px 0">${badges}</div>` : ""}
-        <div style="padding-top:6px"><a href="${yahoo}" target="_blank" rel="noopener" style="color:var(--accent)">開 Yahoo 股市頁 ↗</a></div>
       </div>
     </div>`;
   document.getElementById("sp-overlay").style.display = "block";
@@ -969,6 +1024,14 @@ function openStock(code) {
     }
     el.innerHTML = `<div class="sp-colhd">大戶持股走向 <span class="sub">週資料・佔集保庫存%</span></div>
       ${rows}${talk ? `<div class="sub" style="padding:3px 0 0">${talk}折線=近 ${ser.length} 週方向。</div>` : ""}`;
+  });
+  loadHealth().then(d => {
+    const el = document.getElementById("sp-health");
+    if (!el || !d || !d.ok) return;
+    const h = (d.data.stocks || {})[code];
+    if (!h) return;                                     // 沒健診資料就整塊不顯示，不放空殼
+    const mmdd = d.data_date ? d.data_date.slice(5).replace("-", "/") : "?";
+    el.innerHTML = healthHTML(h, mmdd, d.data.quarter, code);
   });
   loadTa().then(d => {
     const el = document.getElementById("sp-ta");
@@ -1254,6 +1317,93 @@ const TA_SIG = {
   macd_gc:    ["MACD 黃金交叉 參考", "ta-tag ref"],
   macd_dc:    ["MACD 死亡交叉 參考", "ta-tag ref"],
 };
+// ── 四燈號健診卡（health.json lazy fetch）──
+// 描述性彙整：把 12 個既有指標對照固定門檻換成顏色，方便一眼看完四個面向。
+// 不是選股訊號、不做總分排行榜（燈號型評分在 tw-quant-lab 驗過沒有預測力）。
+let HEALTH = null;
+function loadHealth() {
+  if (!HEALTH) HEALTH = fetch("health.json").then(r => r.json()).catch(() => null);
+  return HEALTH;
+}
+const HC_PCT = v => (typeof v === "string" ? v : (v > 0 ? "+" : "") + v + "%");
+const HC_PP = v => (typeof v === "string" ? v : (v > 0 ? "+" : "") + v + "pp");
+const HC_RATE = v => v + "%";                 // 比率（券資比／殖利率）不加正負號，它不是「增減」
+const HC_NUM = v => v;
+const HC_TILE = v => v + " 分位" + (v < 35 ? "（偏低）" : v <= 65 ? "（合理）" : "（偏高）");
+// [面 key, 標題, [項目名], [門檻說明], [格式化函式]]；權重固定 40/30/30
+// 不放 emoji 圖示：它會把旁邊的燈號蓋掉（使用者第一版反應「沒看到燈號」），燈號要當唯一焦點
+const HC_FACES = [
+  ["f", "基本面",
+   ["EPS 年增率", "月營收年增率", "毛利率年增差"],
+   ["綠:>+5% ｜ 黃:±5% ｜ 紅:<-5%（TTM 近四季滾動）",
+    "綠:>+5% ｜ 黃:±5% ｜ 紅:<-5%",
+    "綠:>+2pp ｜ 黃:±2pp ｜ 紅:<-2pp（TTM 近四季滾動）"],
+   [HC_PCT, HC_PCT, HC_PP]],
+  ["c", "籌碼面",
+   ["外資近5日佔20日均量", "投信近5日佔20日均量", "券資比"],
+   ["綠:>+10% ｜ 黃:±10% ｜ 紅:<-10%",
+    "綠:>+5% ｜ 黃:±5% ｜ 紅:<-5%",
+    "綠:<5% ｜ 黃:5%~15% ｜ 紅:>15%（台股普遍極低，僅當風險旗標；上櫃無資料）"],
+   [HC_PCT, HC_PCT, HC_RATE]],
+  ["t", "技術面",
+   ["均線排列", "RSI (14)", "布林通道位置"],
+   ["綠:多頭排列(MA5>MA20>MA60) ｜ 黃:多空交錯 ｜ 紅:空頭排列",
+    "綠:50~70 ｜ 黃:30~50 或 70~80 ｜ 紅:<30 或 >80",
+    "綠:中軌之上未觸上軌 ｜ 黃:中軌之下 ｜ 紅:觸及上軌或跌破下軌"],
+   [HC_NUM, HC_NUM, HC_NUM]],
+  ["v", "估值面",
+   ["本益比同業分位", "股價淨值比同業分位", "目前殖利率"],
+   ["綠:<35 偏低 ｜ 黃:35~65 合理 ｜ 紅:>65 偏高（同產業橫斷面，非本益比河流）",
+    "綠:<35 偏低 ｜ 黃:35~65 合理 ｜ 紅:>65 偏高（同產業橫斷面）",
+    "綠:>5% ｜ 黃:2%~5% ｜ 紅:<2%"],
+   [HC_TILE, HC_TILE, HC_RATE]],
+];
+const HC_W = [40, 30, 30];
+// grade 0/1/2 → 弱/中/強。**照台股邏輯：強=紅、弱=綠**（與全站漲跌同一套語意）
+const HC_CLS = ["w", "m", "s"];
+const HC_MARK = ["✗", "－", "✓"];
+function hcFaceTone(sc) { return sc == null ? "n" : sc >= 18 ? "s" : sc >= 10 ? "m" : "w"; }
+function hcFaceWord(sc) { return sc == null ? "無資料" : sc >= 18 ? "強勁" : sc >= 10 ? "中性" : "偏弱"; }
+function hcTotTone(t, max) { const p = t / (max || 100) * 100; return p >= 70 ? "s" : p >= 40 ? "m" : "w"; }
+function healthHTML(h, mmdd, quarter, code) {
+  const isEtf = h.kind === "etf";
+  const faces = HC_FACES.map(([key, title, names, rules, fmts], fi) => {
+    const trio = h[key];
+    if (trio === null) return "";           // 這面對本標的不適用（ETF 的基本面／估值面）→ 整塊不畫
+    const sc = (h.sc || [])[fi];
+    const tone = hcFaceTone(sc);
+    const items = names.map((nm, i) => {
+      const [g, v] = (trio || [])[i] || [null, null];
+      const c = g == null ? "n" : HC_CLS[g];
+      const txt = g == null ? "資料未備" : HC_MARK[g] + " " + fmts[i](v);
+      return `<div class="hc-item">
+        <div class="hc-line"><span>${nm}</span><span class="hc-w">${g == null ? "不計分" : (g / 2 * HC_W[i]) + "/" + HC_W[i] + " 分"}</span>
+          <span class="hc-v ${c}">${txt}</span></div>
+        <div class="hc-rule">${rules[i]}</div></div>`;
+    }).join("");
+    return `<div class="hc-face ${tone}">
+      <div class="hc-fhd"><span class="hc-dot"></span><span>${title} － ${hcFaceWord(sc)}</span>
+        <span class="hc-fsc">${sc == null ? "—" : sc + "<small>/25</small>"}</span></div>
+      ${items}</div>`;
+  }).join("");
+  const na = h.na ? `　${h.na} 格資料未備（不計入分母）` : "";
+  const max = h.max || 100;
+  // ETF：沒有 EPS／毛利／營收，PE／PB 對一籃子持股也不具個股意義 → 只評 2 面、滿分 50。
+  // 分母跟個股不同，所以標題直接寫清楚，避免拿 ETF 的分數去跟個股比。
+  const etfNote = isEtf
+    ? `ETF 只評籌碼面＋技術面（無 EPS／毛利／營收，PE／PB 對一籃子持股不具個股意義），
+       滿分 50，<b>不要拿去跟個股的 100 分制比較</b>。
+       ${/[LR]$/.test(code || "") ? "此為槓桿／反向型，每日重設槓桿、長期持有會偏離指數報酬。" : ""}<br>`
+    : "";
+  return `<div class="hc-wrap">
+    <div class="hc-top"><b>${isEtf ? "雙燈號健診" : "四燈號健診"}</b>
+      <span class="hc-sub">紅=強、綠=弱${isEtf ? "・ETF 版" : ""}</span>
+      <span class="hc-tot ${hcTotTone(h.tot, max)}">${h.tot}<small>/${max}</small></span></div>
+    <div class="hc-grid">${faces}</div>
+    <div class="hc-foot">${etfNote}描述性彙整，非選股訊號或買賣建議・權重人訂、未經回測・
+      技術/籌碼資料日 ${mmdd}${!isEtf && quarter ? "・財報 " + (h.yq || quarter) : ""}${na}</div></div>`;
+}
+
 // ── 布林通道圖（closes80.json lazy fetch；收盤折線＋上/中/下軌，近 60 日）──
 let C80 = null;
 function loadC80() {
@@ -2674,6 +2824,15 @@ def main() -> None:
         print(f"[OK ] docs/ta.json（{n_ta} 檔）")
     data["ta_meta"] = {"ok": ta.get("ok", False), "data_date": ta.get("data_date"),
                        "note": ta["data"].get("note") if ta.get("ok") else None}
+
+    # 四燈號健診 → docs/health.json（個股面板；lazy fetch 單檔，別內嵌撐爆頁面）
+    health = read_json("health")
+    if health.get("ok"):
+        DOCS_DIR.mkdir(parents=True, exist_ok=True)
+        (DOCS_DIR / "health.json").write_text(
+            json.dumps(health, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[OK ] docs/health.json（{health['data'].get('n', 0)} 檔，"
+              f"12 格全備 {health['data'].get('n_full', 0)} 檔）")
 
     # 大戶級距×期間對比 → docs/tdcc_view.json（lazy fetch，~430KB 別內嵌）
     tv = read_json("tdcc_view")

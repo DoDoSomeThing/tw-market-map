@@ -12,7 +12,7 @@ MIN_BAL = 500   # 今日餘額 ≥500 張才列，濾極小融資標的雜訊
 
 
 def margin_cols(fields: list) -> dict | None:
-    """個股融資融券表 → {代號, 名稱, 前日餘額, 今日餘額} 的欄位索引。欄位改版回 None。
+    """個股融資融券表 → 欄位索引（融資前日/今日餘額 + 融券今日餘額）。欄位改版回 None。
 
     ⚠️ 這張表的欄位名稱**會重複**：融資段與融券段都叫「買進/賣出/前日餘額/今日餘額」——
     直接用 {name: i} 建表會被後段的融券蓋掉，抓出來的「融資餘額」其實是融券餘額。
@@ -34,7 +34,12 @@ def margin_cols(fields: list) -> dict | None:
         "前日餘額": col_index(fields, "前日餘額", start=i_cash + 1, end=end),
         "今日餘額": col_index(fields, "今日餘額", start=i_cash + 1, end=end),
     }
-    return cols if all(v is not None for v in cols.values()) else None
+    if not all(v is not None for v in cols.values()):
+        return None
+    # 融券今日餘額（券資比用）。找不到不算致命：融資段照舊出，券資比留 None。
+    if i_bond is not None:
+        cols["券今日餘額"] = col_index(fields, "今日餘額", start=i_bond + 1)
+    return cols
 
 
 def main() -> None:
@@ -59,7 +64,8 @@ def main() -> None:
         write_error("margin", "TWSE MI_MARGN ALL",
                     f"欄位改版，拒絕用位置硬猜：{table.get('fields')}")
         return
-    need = max(cols.values())
+    i_short = cols.pop("券今日餘額", None)
+    need = max([*cols.values(), i_short if i_short is not None else 0])
 
     daily = read_json("daily_all")
     meta = {}
@@ -79,9 +85,13 @@ def main() -> None:
         if prev is None or today is None:
             continue
         chg = today - prev
+        short = parse_num(row[i_short]) if i_short is not None else None   # 融券今日餘額（張）
+        # 券資比 = 融券餘額 ÷ 融資餘額。融資 0 時比率無意義（分母 0）→ None，不要寫 0 裝好看。
+        sbr = round(short / today * 100, 2) if short is not None and today > 0 else None
         m = meta.get(code, {})
         stocks[code] = {"name": (row[cols["名稱"]] or "").strip() or code, "bal": int(today),
-                        "chg": int(chg), "pct": m.get("pct"), "close": m.get("close"),
+                        "chg": int(chg), "short": int(short) if short is not None else None,
+                        "sbr": sbr, "pct": m.get("pct"), "close": m.get("close"),
                         "industry": m.get("industry") or ""}
 
     if not stocks:
@@ -92,14 +102,16 @@ def main() -> None:
     inc = sorted(rated, key=lambda x: x["chg"], reverse=True)[:TOP]
     dec = sorted(rated, key=lambda x: x["chg"])[:TOP]
 
-    # 全量 by_code [餘額, 增減]（張）：inc/dec 只有 top 30，個股面板要查任一檔都得有值。
+    # 全量 by_code [融資餘額, 增減, 券資比%]（張／%）：inc/dec 只有 top 30，個股面板要查任一檔都得有值。
     # 精簡成陣列省 payload（~1200 檔約 25KB，內嵌進 index.html）。
-    by_code = {c: [v["bal"], v["chg"]] for c, v in stocks.items()}
+    # 第 3 欄是後加的（2026-08-07 健診卡），舊快照只有 2 欄 → 讀取端一律用索引取值容錯。
+    by_code = {c: [v["bal"], v["chg"], v["sbr"]] for c, v in stocks.items()}
 
     date_iso = ymd_to_iso(str(j.get("date"))) or (daily.get("data_date"))
+    n_sbr = sum(1 for v in stocks.values() if v["sbr"] is not None)
     write_json("margin", {"inc": inc, "dec": dec, "by_code": by_code,
-                          "n": len(stocks), "min_bal": MIN_BAL},
-               data_date=date_iso, source="TWSE MI_MARGN（個股融資餘額，上市）")
+                          "n": len(stocks), "n_sbr": n_sbr, "min_bal": MIN_BAL},
+               data_date=date_iso, source="TWSE MI_MARGN（個股融資餘額＋券資比，上市）")
 
 
 if __name__ == "__main__":
