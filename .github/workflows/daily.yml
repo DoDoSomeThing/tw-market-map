@@ -92,7 +92,7 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           TITLE="❌ daily-update 異常 $(date -u +'%Y-%m-%d')"
           BODY=$(cat <<EOF
-          每日資料管線有異常，**累積型資料可能缺一天（缺口永久）**，請確認是否需要補跑。
+          @DoDoSomeThing 每日資料管線有異常，**累積型資料可能缺一天（缺口永久）**，請確認是否需要補跑。
 
           - pipeline 結果：\`${{ steps.pipeline.outcome }}\`
           - 部分模組失敗：\`${{ steps.check.outputs.partial }}\`

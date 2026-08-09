@@ -156,7 +156,7 @@ def issue_markdown(sugg: list[dict]) -> tuple[str, str]:
     date = tw_now().strftime("%Y-%m-%d")
     title = f"🆕 新技術題材候選 {date}（{len(sugg)} 個，價值鏈可能要加中下游）"
     lines = [
-        "偵測層(詞頻突增)發現**新聞在燒、但價值鏈還沒收的題材**。純統計、非題材認定，",
+        "@DoDoSomeThing 偵測層(詞頻突增)發現**新聞在燒、但價值鏈還沒收的題材**。純統計、非題材認定，",
         "**要不要加 node、加哪些股由你拍板**。以下每個附共現個股與可直接跑的圈定指令。",
         "",
     ]
