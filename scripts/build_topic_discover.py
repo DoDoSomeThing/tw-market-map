@@ -24,6 +24,12 @@ MAX_CANDIDATES = 8
 NOISE_TITLE = re.compile(r"^(盤中速報|盤後速報|個股速報|盤中零股|鉅亨速報)")
 CJK = re.compile(r"[一-鿿]")
 ASCII_TERM = re.compile(r"[A-Za-z][A-Za-z0-9\-\.]{2,11}")
+ASCII_ONLY = re.compile(r"^[A-Za-z0-9\-\.]+$")
+TECH_ROOTS_PATH = ROOT / "topics" / "tech_roots.txt"
+# ASCII 詞看似技術縮寫但其實是通用/市場詞的，別當科技長相。
+ASCII_NOT_TECH = {"ETF", "ADR", "KY", "US", "QFII", "IPO", "SPO", "GDR",
+                  "CEO", "CFO", "COO", "ESG", "GDP", "CPI", "PPI", "FED",
+                  "Q1", "Q2", "Q3", "Q4", "YOY", "MOM", "EPS", "ROE", "PER"}
 
 
 def load_stopwords() -> set[str]:
@@ -34,6 +40,29 @@ def load_stopwords() -> set[str]:
             if w and not w.startswith("#"):
                 out.add(w)
     return out
+
+
+def load_tech_roots() -> set[str]:
+    """科技題材詞根（白名單）。候選需含其一才算「新技術題材」，濾掉八卦/盤勢/人名。"""
+    out = set()
+    if TECH_ROOTS_PATH.exists():
+        for line in TECH_ROOTS_PATH.read_text(encoding="utf-8").splitlines():
+            w = line.strip()
+            if w and not w.startswith("#"):
+                out.add(w)
+    return out
+
+
+def is_tech_shaped(terms: list[str], roots: set[str]) -> bool:
+    """一組詞裡任一個像科技題材：含技術詞根，或是技術英文縮寫（排除 ETF/IPO 等通用詞）。"""
+    for t in terms:
+        if any(r in t for r in roots):
+            return True
+        if ASCII_ONLY.match(t):
+            base = re.sub(r"[\d\.\-]+$", "", t.upper())   # 去尾數字/符號:ADR5→ADR
+            if base and base not in ASCII_NOT_TECH and not t.replace("-", "").replace(".", "").isdigit():
+                return True
+    return False
 
 
 def load_known_terms() -> set[str]:
@@ -96,6 +125,7 @@ def main() -> None:
     import jieba
     jieba.setLogLevel(60)
     stop = load_stopwords()
+    tech_roots = load_tech_roots()
     known = load_known_terms()
     known_lower = {k.lower() for k in known}
     for k in known:   # 已知詞餵進 jieba，切得乾淨才排除得乾淨
@@ -171,6 +201,9 @@ def main() -> None:
         for t in g:
             idxs |= term_titles[t]
         if len(idxs) < MIN_RECENT:
+            continue
+        # 白名單閘門:整組沒一個科技題材長相 → 是八卦/盤勢/人名,丟掉(取代黑名單打地鼠)
+        if tech_roots and not is_tech_shaped(g, tech_roots):
             continue
         items = sorted((recent_items[i] for i in idxs),
                        key=lambda x: x.get("time", ""), reverse=True)
