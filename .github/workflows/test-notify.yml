@@ -1,0 +1,19 @@
+# test-notify.yml — 一次性:測「github-actions[bot] 開 Issue 會不會寄信給我」。
+# 手動觸發(Actions → test-notify → Run workflow,或 gh workflow run test-notify.yml)。
+# bot ≠ 你本人 → 你 watch 的 repo 有「別人」開 Issue → GitHub 應寄信/推播。測完刪本檔。
+name: test-notify
+on:
+  workflow_dispatch:
+permissions:
+  issues: write
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open test issue as bot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "${{ github.repository }}" \
+            --title "🔔 bot 通知測試 $(date -u +'%H:%M UTC')" \
+            --body "由 github-actions[bot] 開的 Issue（≠你本人）。收到信/推播 = 真實提醒通道通，以後新技術題材提醒一樣會到。測完刪。"
