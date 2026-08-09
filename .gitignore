@@ -12,3 +12,7 @@ data/ohlc_window.json.gz
 # 工具快取／本機 agent 設定（不進 git）
 .ruff_cache/
 .claude/
+
+# 半自動價值鏈候選審計檔(本機探索產物,不進 git)
+data/chain_proposals/
+chains/chains.json.bak
