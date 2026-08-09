@@ -140,6 +140,21 @@ jobs:
             done
 
 
+      # 新技術題材提醒：build_chain_suggestions 已濾出「新聞在燒、價值鏈還沒收」的題材
+      # （雜訊詞/舊題材/已提醒過的都濾掉了）。非空才開一支 Issue 提醒 Justin 手動加 node。
+      # 開完 --commit-state 記錄簽章，同題材不再重提（state 檔隨下面 Commit 步驟進 git）。
+      - name: Suggest new value-chain themes
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=$(python -c "import json;print(len(json.load(open('data/chain_suggestions.json'))['data']['suggestions']))" 2>/dev/null || echo 0)
+          if [ "$N" = "0" ]; then echo "無新題材候選，不開 Issue"; exit 0; fi
+          python -c "import json;d=json.load(open('data/chain_suggestions.json'))['data'];open('/tmp/ct.txt','w').write(d['issue_title']);open('/tmp/cb.md','w').write(d['issue_body'])"
+          echo "有 $N 個新題材候選 → 開 Issue"
+          gh issue create --title "$(cat /tmp/ct.txt)" --body-file /tmp/cb.md
+          python scripts/build_chain_suggestions.py --commit-state
+
       # 存回今日更新後的視窗（每次 run 唯一 key，滾動前進）
       - name: Save OHLC window cache
         if: always()

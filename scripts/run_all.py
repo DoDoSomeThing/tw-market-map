@@ -35,6 +35,7 @@ SCRIPTS = [
     "build_topic_discover.py",
     "build_changes.py",
     "build_chains.py",
+    "build_chain_suggestions.py",  # 新技術題材 → 價值鏈 node 候選（濾雜訊；Actions 見非空開 Issue 提醒）
     "build_flow.py",
     "build_summary.py",   # 今日一句白話摘要（純規則、讀 breadth/market/flow/heatmap）
     "build_alerts.py",    # 今日異常警示（純規則、讀 inst_rank/ta）
