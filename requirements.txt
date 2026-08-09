@@ -1,3 +1,5 @@
 requests>=2.31
 yfinance>=0.2.40
 jieba>=0.42
+pandas>=2.0
+lxml>=5.0        # fetch_fin_history.py 用 pandas.read_html 解 MOPS 季報表；缺它 CI 每季 ImportError
