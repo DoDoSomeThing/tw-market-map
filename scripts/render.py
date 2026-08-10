@@ -2870,7 +2870,9 @@ def main() -> None:
     daily = read_json("daily_all")
     if daily.get("ok"):
         for s in daily["data"].get("stocks", []):
-            if len(s["code"]) == 4 and s["code"].isdigit():
+            # 4 碼個股 + 所有 00 開頭 ETF/ETN（含 5-6 碼如 00646、槓桿 00631L、主動 00xxxA）。
+            # 不無腦收全 6 碼：那堆多是 REIT(01xxxT)/ETN(02xxx) 雜訊。
+            if (len(s["code"]) == 4 and s["code"].isdigit()) or s["code"].startswith("00"):
                 inst = t86_stocks.get(s["code"])
                 sf, st = streaks.get(s["code"], (0, 0))
                 search.append([s["code"], s["name"], s.get("industry") or "",
