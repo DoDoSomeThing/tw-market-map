@@ -765,7 +765,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-08-10", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-08-10 22:36";
+const BUILT_AT = "2026-08-10 22:53";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -1662,9 +1662,13 @@ function drawHealthRank() {
   const wrap = document.getElementById("hr-table"), dist = document.getElementById("hr-dist"),
         note = document.getElementById("hr-note");
   const isEtf = HR_COHORT === "etf";
+  const MIN_VAL = 1;   // 個股成交值地板（億）：低流動雞蛋水餃股籌碼/技術全是噪音，幾張就灌綠 → 剔除
   const pool = HR_ALL.filter(x => (x.h.kind === "etf") === isEtf);
-  const full = pool.filter(x => x.h.na === 0).sort((a, b) => b.h.tot - a.h.tot);   // 只排滿格，總分高→低
-  const incomplete = pool.length - full.length;
+  const scored = pool.filter(x => x.h.na === 0);                       // 滿格
+  const thin = isEtf ? [] : scored.filter(x => (x.q[6] || 0) < MIN_VAL);  // 滿格但流動性不足
+  const full = (isEtf ? scored : scored.filter(x => (x.q[6] || 0) >= MIN_VAL))
+    .sort((a, b) => b.h.tot - a.h.tot);   // 只排滿格且夠流動，總分高→低
+  const incomplete = pool.length - scored.length;
   // C 分布（強≥70% / 中40-69% / 弱<40% of max）
   const band = { s: 0, m: 0, w: 0 };
   full.forEach(x => band[hcTotTone(x.h.tot, x.h.max)]++);
@@ -1674,7 +1678,7 @@ function drawHealthRank() {
   const faceCols = isEtf ? [1, 2] : [0, 1, 2, 3];   // ETF 只有籌碼/技術
   const head = `<tr><th>名次</th><th>股票</th><th>總分</th>`
     + FN.map((n, i) => faceCols.includes(i) ? `<th>${n}</th>` : "").join("")
-    + `<th>現價</th><th>漲跌</th></tr>`;
+    + `<th>成交值</th><th>現價</th><th>漲跌</th></tr>`;
   const body = full.map((x, i) => {
     const h = x.h, q = x.q, tone = hcTotTone(h.tot, h.max);
     const faceCells = FN.map((n, fi) => {
@@ -1687,13 +1691,15 @@ function drawHealthRank() {
       + `<td>${q[1]} <span class="sub">${x.c}</span></td>`
       + `<td class="hr-tot ${tone}">${h.tot}<span class="sub">/${h.max}</span></td>`
       + faceCells
+      + `<td>${(q[6] || 0).toLocaleString()}<span class="sub">億</span></td>`
       + `<td class="${cls(q[4])}">${q[3]}</td>`
       + `<td class="${cls(q[4])}">${sign(q[4])}%</td></tr>`;
   }).join("");
   wrap.innerHTML = `<table class="hr-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
-  note.innerHTML = `${isEtf ? "ETF" : "個股"}共 <b>${full.length}</b> 檔滿格參與排名`
+  note.innerHTML = `${isEtf ? "ETF" : "個股"}共 <b>${full.length}</b> 檔參與排名`
+    + (isEtf ? "" : `（成交值 ≥ ${MIN_VAL} 億；濾掉 ${thin.length} 檔低流動雞蛋水餃股——它們幾張成交就把籌碼/技術面灌綠，是噪音不是強）`)
     + (incomplete ? `；另 ${incomplete} 檔資料不全（缺格未列入，避免缺分母灌分）` : "")
-    + `。名次＝依總分高→低；分數為 12 指標對照固定門檻加權，<b>非買賣訊號、未回測</b>。`;
+    + `。名次＝依總分高→低。<b>提醒：分數量的是「動能＋當下快照」不是公司品質</b>——正在被拉的股票技術/籌碼面會滿分。非買賣訊號、未回測。`;
 }
 document.querySelectorAll(".hr-cohort .chip").forEach(b =>
   b.addEventListener("click", () => {
