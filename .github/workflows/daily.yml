@@ -36,9 +36,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: data/ohlc_window.json.gz
-          key: ohlc-window-${{ github.run_id }}
+          key: ohlc-window-v2-${{ github.run_id }}
           restore-keys: |
-            ohlc-window-
+            ohlc-window-v2-
 
       # cache miss（首次 / 逾 7 天未存被逐出）→ 由 repo 內 archive（data/history_ohlc/）秒重建。
       # archive 是永久正本、每日 append-only 累積，永遠比舊的種子基準檔新。
@@ -161,7 +161,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: data/ohlc_window.json.gz
-          key: ohlc-window-${{ github.run_id }}
+          key: ohlc-window-v2-${{ github.run_id }}
 
       # always()：即使 pipeline 有模組失敗也要 commit ——「今日 archive 快照」只存在 runner 上，
       # 不 commit 就永久缺這天（累積型資料最怕的洞）。工作區乾淨的資料先落地，紅燈留到最後報。
