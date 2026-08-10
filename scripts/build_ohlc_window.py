@@ -41,6 +41,12 @@ SEED_DAYS = 260                 # 種子回補的交易日數
 WINDOW_PATH = DATA_DIR / "ohlc_window.json.gz"
 ARCHIVE_DIR = DATA_DIR / "history_ohlc"
 
+
+def _track(code: str) -> bool:
+    """要納入 OHLC 歷史/技術面的代號：4 碼個股 + 所有 00 開頭 ETF/ETN
+    （含 5-6 碼如 00646、槓桿 00631L、主動 00xxxA）。不收 REIT(01xxxT)/ETN(02xxx) 等雜訊。"""
+    return (len(code) == 4 and code.isdigit()) or code.startswith("00")
+
 # ── 按日種子（TWSE/TPEx，主種子法）──
 TWSE_MI_URL = ("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
                "?response=json&date={d8}&type=ALLBUT0999")
@@ -173,7 +179,7 @@ def daily_append() -> int:
     added = skipped = 0
     for s in daily["data"].get("stocks", []):
         code = s["code"]
-        if len(code) != 4 or not code.isdigit():
+        if not _track(code):
             continue
         o, h, l, c = s.get("open"), s.get("high"), s.get("low"), s.get("close")
         v = s.get("vol")
@@ -225,7 +231,7 @@ def _fetch_twse_day(iso: str) -> dict[str, dict] | None:
     out = {}
     for row in table["data"]:
         code = str(row[ic]).strip()
-        if len(code) != 4 or not code.isdigit():
+        if not _track(code):
             continue
         o, h, l, c = parse_num(row[io]), parse_num(row[ih]), parse_num(row[il]), parse_num(row[icl])
         if None in (o, h, l, c) or c <= 0:
@@ -255,7 +261,7 @@ def _fetch_tpex_day(iso: str) -> dict[str, dict] | None:
     out = {}
     for row in table["data"]:
         code = str(row[ic]).strip()
-        if len(code) != 4 or not code.isdigit():
+        if not _track(code):
             continue
         o, h, l, c = parse_num(row[io]), parse_num(row[ih]), parse_num(row[il]), parse_num(row[icl])
         if None in (o, h, l, c) or c <= 0:
