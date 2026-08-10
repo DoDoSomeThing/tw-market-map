@@ -260,6 +260,28 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 12px 12px; }
 .hc-v.n { color: var(--muted); font-weight: 400; }
 .hc-rule { color: var(--muted); font-size: .7rem; margin-top: 2px; letter-spacing: .01em; }
 
+/* 體檢榜（四燈號可排序總表 + 分布）；體檢非選股、未回測 */
+.hr-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 8px; }
+.hr-cohort { display: flex; gap: 6px; }
+.hr-cohort .chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: .82rem; cursor: pointer; transition: border-color var(--tr), color var(--tr); }
+.hr-cohort .chip.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.hr-dist { display: flex; gap: 6px; flex-wrap: wrap; font-size: .78rem; font-family: var(--num); }
+.hr-dist span { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.hr-dist .s { color: var(--hc-strong); background: var(--hc-strong-s); }
+.hr-dist .m { color: var(--hc-mid); background: var(--hc-mid-s); }
+.hr-dist .w { color: var(--hc-weak); background: var(--hc-weak-s); }
+.hr-wrap { overflow-x: auto; }
+.hr-tbl { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.hr-tbl th { position: sticky; top: 0; z-index: 1; background: var(--surface); cursor: pointer; white-space: nowrap; text-align: right; padding: 7px 9px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; user-select: none; }
+.hr-tbl th:nth-child(2) { text-align: left; }
+.hr-tbl td { text-align: right; padding: 6px 9px; border-bottom: 1px solid var(--border); font-family: var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hr-tbl td:nth-child(2) { text-align: left; font-family: inherit; cursor: pointer; }
+.hr-tbl tbody tr:hover td { background: var(--accent-soft); }
+.hr-tot { font-weight: 800; }
+.hr-tot.s { color: var(--hc-strong); } .hr-tot.m { color: var(--hc-mid); } .hr-tot.w { color: var(--hc-weak); }
+.hr-face.s { color: var(--hc-strong); } .hr-face.m { color: var(--hc-mid); } .hr-face.w { color: var(--hc-weak); }
+.hr-face.n { color: var(--muted); }
+
 /* 營收亮點卡 */
 .rev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 9px; }
 .rev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; font-size: .84rem; line-height: 1.55; cursor: pointer; transition: border-color var(--tr), box-shadow var(--tr); }
@@ -602,6 +624,7 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
     <button class="tab" data-pane="market">市場熱力</button>
     <button class="tab" data-pane="watch">觀測站</button>
     <button class="tab" data-pane="fund">基本面</button>
+    <button class="tab" data-pane="health">體檢榜</button>
     <button class="tab" data-pane="news">新聞</button>
   </nav>
 </div></header>
@@ -714,6 +737,17 @@ footer { color: var(--muted); font-size: .72rem; padding: 18px 0; line-height: 1
 <section id="sec-exdiv"><h2>近期除息（依除息日近→遠） <span class="stamp" data-stamp="dividend"></span></h2><div class="sub">TWSE 除權息預告表｜<b>最後買進日</b>＝除息日前一交易日，當天收盤前買到才吃得到這次配息（未扣國定連假，遇連假可能早一天，僅供參考）｜殖利率=本次現金股利÷現價｜僅上市（上櫃無資料）｜點列開個股面板</div><div id="exdiv"></div></section>
 </div>
 
+<div class="tabpane" id="pane-health">
+<section id="sec-healthrank"><h2>體檢榜 <span class="stamp" data-stamp="health"></span></h2>
+<div class="sub"><b>體檢非選股</b>：把 12 個現有指標對照固定門檻加權成分數（基本/籌碼/技術 40/30/30、ETF 走 2 面制），<b>未回測、不保證預測力</b>，只當「現況一眼看完」。<b>紅＝強、綠＝弱</b>（台股語意）。個股（滿分 100）與 ETF（滿分 50）<b>分開排、不同表</b>；缺格股不列入避免灌分。點欄位標題排序、點列開個股。</div>
+<div class="hr-ctrl">
+  <div class="hr-cohort"><button class="chip active" data-cohort="stock">個股 · 滿分100</button><button class="chip" data-cohort="etf">ETF · 滿分50</button></div>
+  <div id="hr-dist" class="hr-dist"></div>
+</div>
+<div id="hr-table" class="hr-wrap"></div>
+<div id="hr-note" class="sub" style="margin-top:8px"></div></section>
+</div>
+
 <div class="tabpane" id="pane-news">
 <section id="sec-news"><h2>市場新聞 <span class="stamp" data-stamp="news"></span></h2><div class="sub">鉅亨網 + Yahoo 股市 RSS 標題聚合｜內文請點標題回原站｜標籤為標題關鍵字自動比對</div><div id="news"></div></section>
 </div>
@@ -731,7 +765,7 @@ const DATA = {"indices": {"ok": true, "data_date": "2026-08-10", "fetched_at": "
 // PE 高於此值＝「獲利極低導致失真」而非「昂貴」：EPS 趨近 0 時 PE 會爆到幾千倍
 // （M31 PE 10300 = 近四季每股僅賺 0.04 元）→ 面板標示，避免與台積 PE 33 被當同尺度誤讀
 const PE_ABSURD = 200;
-const BUILT_AT = "2026-08-10 18:47";
+const BUILT_AT = "2026-08-10 22:36";
 
 // ── 長表摺疊 ──
 // 焦點頁 65% 的高度來自四張長表（資金流/個股動向/營收亮點/今日異動 合計 3035px）。
@@ -1604,6 +1638,70 @@ document.addEventListener("click", e => {
   });
   rows.forEach(r => r.parentNode.appendChild(r));
 });
+
+// ── 體檢榜（四燈號健診可排序總表 + 分布）──
+// 定位：不是選股訊號、不做編輯精選 Top-N。這是「可排序體檢表」——你自己點欄位排，
+// 性質是查詢工具。個股(滿分100)/ETF(滿分50) 分開排（混排=蘋果比橘子），缺格股不列入
+// （避免缺分母灌分，呼應當初 0050 湊 90 分的坑）。分數未回測、無預測力保證。
+let HR_ALL = [], HR_COHORT = "stock", HR_BUILT = false;
+function ensureHealthRank() {
+  if (HR_BUILT) return;
+  HR_BUILT = true;
+  const wrap = document.getElementById("hr-table");
+  wrap.innerHTML = '<div class="sub">載入健診資料…</div>';
+  loadHealth().then(H => {
+    const st = H && H.data && H.data.stocks;
+    const stamp = document.querySelector('[data-stamp="health"]');
+    if (stamp) stamp.innerHTML = H ? stampFor(H) : "";
+    if (!st) { wrap.innerHTML = '<div class="err">健診資料抓取失敗</div>'; return; }
+    HR_ALL = Object.keys(st).filter(c => QUOTES[c]).map(c => ({ c, h: st[c], q: QUOTES[c] }));
+    drawHealthRank();
+  });
+}
+function drawHealthRank() {
+  const wrap = document.getElementById("hr-table"), dist = document.getElementById("hr-dist"),
+        note = document.getElementById("hr-note");
+  const isEtf = HR_COHORT === "etf";
+  const pool = HR_ALL.filter(x => (x.h.kind === "etf") === isEtf);
+  const full = pool.filter(x => x.h.na === 0).sort((a, b) => b.h.tot - a.h.tot);   // 只排滿格，總分高→低
+  const incomplete = pool.length - full.length;
+  // C 分布（強≥70% / 中40-69% / 弱<40% of max）
+  const band = { s: 0, m: 0, w: 0 };
+  full.forEach(x => band[hcTotTone(x.h.tot, x.h.max)]++);
+  dist.innerHTML = `<span class="s">強 ${band.s}</span><span class="m">中 ${band.m}</span><span class="w">弱 ${band.w}</span>`;
+  // D 表
+  const FN = ["基本", "籌碼", "技術", "估值"];
+  const faceCols = isEtf ? [1, 2] : [0, 1, 2, 3];   // ETF 只有籌碼/技術
+  const head = `<tr><th>名次</th><th>股票</th><th>總分</th>`
+    + FN.map((n, i) => faceCols.includes(i) ? `<th>${n}</th>` : "").join("")
+    + `<th>現價</th><th>漲跌</th></tr>`;
+  const body = full.map((x, i) => {
+    const h = x.h, q = x.q, tone = hcTotTone(h.tot, h.max);
+    const faceCells = FN.map((n, fi) => {
+      if (!faceCols.includes(fi)) return "";
+      const sc = (h.sc || [])[fi];
+      return sc == null ? `<td class="hr-face n">–</td>` : `<td class="hr-face ${hcFaceTone(sc)}">${sc}</td>`;
+    }).join("");
+    return `<tr onclick="if(window.spClose)spClose();openStock('${x.c}')">`
+      + `<td>${i + 1}</td>`
+      + `<td>${q[1]} <span class="sub">${x.c}</span></td>`
+      + `<td class="hr-tot ${tone}">${h.tot}<span class="sub">/${h.max}</span></td>`
+      + faceCells
+      + `<td class="${cls(q[4])}">${q[3]}</td>`
+      + `<td class="${cls(q[4])}">${sign(q[4])}%</td></tr>`;
+  }).join("");
+  wrap.innerHTML = `<table class="hr-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  note.innerHTML = `${isEtf ? "ETF" : "個股"}共 <b>${full.length}</b> 檔滿格參與排名`
+    + (incomplete ? `；另 ${incomplete} 檔資料不全（缺格未列入，避免缺分母灌分）` : "")
+    + `。名次＝依總分高→低；分數為 12 指標對照固定門檻加權，<b>非買賣訊號、未回測</b>。`;
+}
+document.querySelectorAll(".hr-cohort .chip").forEach(b =>
+  b.addEventListener("click", () => {
+    if (HR_COHORT === b.dataset.cohort) return;
+    HR_COHORT = b.dataset.cohort;
+    document.querySelectorAll(".hr-cohort .chip").forEach(x => x.classList.toggle("active", x === b));
+    drawHealthRank();
+  }));
 
 // ── 指數卡 ──
 (function () {
@@ -2677,9 +2775,10 @@ function fundLine(code) {
 
 // ── 分頁切換 ──
 (function () {
-  const PANES = ["focus", "radar", "topics", "chains", "market", "watch", "fund", "news"];
+  const PANES = ["focus", "radar", "topics", "chains", "market", "watch", "fund", "health", "news"];
   function show(id, push) {
     if (!PANES.includes(id)) id = "focus";
+    if (id === "health") ensureHealthRank();   // 首次開才 lazy fetch health.json
     document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "pane-" + id));
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.pane === id));
     if (push) history.replaceState(null, "", location.pathname + location.search + "#tab=" + id);
