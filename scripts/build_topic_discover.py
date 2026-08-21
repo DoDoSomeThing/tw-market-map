@@ -23,6 +23,14 @@ MIN_BURST = 2.0        # 突增倍率門檻
 MAX_CANDIDATES = 8
 NOISE_TITLE = re.compile(r"^(盤中速報|盤後速報|個股速報|盤中零股|鉅亨速報)")
 CJK = re.compile(r"[一-鿿]")
+# 事件/展會/通用動詞 — 一定週期性突增但非價值鏈題材，整類過濾（治類，非逐詞打地鼠）。
+# 尾綴類：以展/峰會/論壇… 收尾的詞（展覽、研討會名一到會期就洗版）。
+# 整詞類：純關係/動作動詞（攜手、進軍、旗下…），零題材含量，還常被選成組標籤。
+NOISE_TERM = re.compile(
+    r"(展|峰會|論壇|大會|說明會|發表會|記者會|博覽會|嘉年華|研討會|高峰會)$"
+    r"|^(攜手|聯手|合攻|結盟|進軍|插旗|搶進|搶攻|卡位|加持|領軍|沾光|旗下"
+    r"|受惠|點名|齊揚|齊漲|同慶|看好|看俏|吸睛|亮眼)$"
+)
 ASCII_TERM = re.compile(r"[A-Za-z][A-Za-z0-9\-\.]{2,11}")
 ASCII_ONLY = re.compile(r"^[A-Za-z0-9\-\.]+$")
 TECH_ROOTS_PATH = ROOT / "topics" / "tech_roots.txt"
@@ -98,7 +106,7 @@ def tokenize(title: str, jieba_mod) -> set[str]:
     toks = set()
     for w in jieba_mod.cut(title):
         w = w.strip()
-        if len(w) >= 2 and CJK.search(w):
+        if len(w) >= 2 and CJK.search(w) and not NOISE_TERM.search(w):
             toks.add(w)
     for m in ASCII_TERM.findall(title):
         if not m.replace("-", "").replace(".", "").isdigit() and not m.endswith("-US"):
