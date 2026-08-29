@@ -7,8 +7,26 @@ from tw_common import (http_get_json, parse_num, read_json, roc_to_iso,
                        tw_today, write_error, write_json, ymd_to_iso)
 
 TWTB4U_URL = "https://www.twse.com.tw/exchangeReport/TWTB4U?date={d}&response=json&selectType=All"
+SOURCE = "TWSE TWTB4U（當日沖銷交易，上市）"
 TOP = 30
 MIN_VALUE = 0.5e8   # 成交值 ≥ 5000 萬
+
+
+def keep_previous(reason: str) -> None:
+    """來源失敗 → 保留前次快照並標註原因，不要用錯誤信封蓋掉好資料。
+
+    2026-08-28 事故：TWSE WAF 間歇對 GitHub Actions 回 307 擋頁，本模組直接
+    write_error → daytrade.json 從完整快照變成 ok:false 空殼，面板整區消失。
+    當沖比是「當日快照」不是累積值，留前一日的數字＋原本的 data_date 即可，
+    面板端靠 data_date 判斷交易日齡會自己標 ⚠️，不會把舊值裝成新鮮。
+    真的沒有前次可留（首跑）才寫錯誤信封。
+    """
+    prev = read_json("daytrade")
+    if not prev.get("ok") or not (prev.get("data") or {}).get("by_code"):
+        write_error("daytrade", SOURCE, reason)
+        return
+    write_json("daytrade", prev["data"], data_date=prev.get("data_date"), source=SOURCE,
+               error=f"{reason}；沿用 {prev.get('data_date')} 快照（來源失敗，寧可標舊也不裝新鮮）")
 
 
 def twtb4u_cols(fields: list) -> tuple[int | None, int | None]:
@@ -27,27 +45,34 @@ def main() -> None:
     daily = read_json("daily_all")
     # 用 daily 的資料日對齊；抓不到就用今天
     dd = (daily.get("data_date") or "").replace("-", "") or tw_today().strftime("%Y%m%d")
-    j = http_get_json(TWTB4U_URL.format(d=dd), timeout=60)
+    try:
+        j = http_get_json(TWTB4U_URL.format(d=dd), timeout=60)
+    except Exception as e:                      # noqa: BLE001 — WAF/連線失敗都算來源掛
+        keep_previous(f"TWTB4U 抓取失敗：{str(e)[:200]}")
+        return
     if not j or j.get("stat") != "OK":
-        write_error("daytrade", "TWSE TWTB4U", f"回應非 OK: {(j or {}).get('stat')}")
+        keep_previous(f"回應非 OK: {(j or {}).get('stat')}")
         return
 
     table = None
+    seen_fields = []
     for t in j.get("tables", []):
         fields = t.get("fields") or []
-        if fields and fields[0] == "證券代號" and len(t.get("data") or []) > 100:
+        if fields and fields[0] == "證券代號":
+            seen_fields.append(fields)
+        _, i_shares = twtb4u_cols(fields)
+        if fields and fields[0] == "證券代號" and i_shares is not None and len(t.get("data") or []) > 100:
             table = t
             break
     if not table:
-        write_error("daytrade", "TWSE TWTB4U", "找不到當沖交易表")
+        keep_previous(f"找不到當沖交易表，候選欄位：{seen_fields[:3]}")
         return
 
     # 欄位位置用名稱查，不寫死索引：TWSE 曾在同一端點回不同欄數的版本（少了註記欄
     # 就整批 IndexError，整個模組掛掉 → 當天當沖資料靜默缺一格）。
     i_name, i_shares = twtb4u_cols(table.get("fields") or [])
     if i_shares is None:
-        write_error("daytrade", "TWSE TWTB4U",
-                    f"當沖表找不到成交股數欄，實得欄位：{table.get('fields')}")
+        keep_previous(f"當沖表找不到成交股數欄，實得欄位：{table.get('fields')}")
         return
 
     meta = {}
@@ -81,13 +106,13 @@ def main() -> None:
                      "value": round((m.get("value") or 0) / 1e8, 1)})
 
     if not rows:
-        write_error("daytrade", "TWSE TWTB4U", "解析後無當沖資料")
+        keep_previous("解析後無當沖資料")
         return
 
     rows.sort(key=lambda x: x["ratio"], reverse=True)
     date_iso = ymd_to_iso(str(j.get("date"))) or daily.get("data_date")
     write_json("daytrade", {"list": rows[:TOP], "by_code": by_code, "min_value": MIN_VALUE},
-               data_date=date_iso, source="TWSE TWTB4U（當日沖銷交易，上市）")
+               data_date=date_iso, source=SOURCE)
 
     # 追加今日大盤當沖比進趨勢序列（歷史由 backfill_daytrade.py 種；此處每日 upsert 今天）
     _update_trend(j, date_iso)
@@ -112,7 +137,11 @@ def _update_trend(twtb_json: dict, date_iso: str | None) -> None:
             if v:
                 dt_total += v
     ym = date_iso.replace("-", "")[:6]
-    f = http_get_json(f"https://www.twse.com.tw/exchangeReport/FMTQIK?date={ym}01&response=json", timeout=40)
+    try:
+        f = http_get_json(f"https://www.twse.com.tw/exchangeReport/FMTQIK?date={ym}01&response=json", timeout=40)
+    except Exception as e:                      # noqa: BLE001 — 大盤量抓不到就不記這天，不要炸掉整支
+        print(f"[WARN] daytrade_trend 略過 {date_iso}：FMTQIK 抓取失敗 {str(e)[:120]}")
+        return
     mkt = None
     if f and f.get("stat") == "OK":
         for r in f.get("data", []):

@@ -815,6 +815,12 @@ function tradingDayAge(iso) {
   }
   return age;
 }
+function localISODate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 function stampFor(env, maxStale = 2) {
   if (!env || !env.ok) return `<span class="stale">⚠️ 資料抓取失敗</span>`;
   const age = tradingDayAge(env.data_date);
@@ -2321,7 +2327,7 @@ function streakBadge(s) {
   if (!env.ok) { el.innerHTML = `<div class="err">除息資料失敗：${env.error || ""}</div>`; return; }
   const up = env.data.upcoming || [];
   if (!up.length) { el.innerHTML = `<div class="sub">近期無上市個股除息</div>`; return; }
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localISODate();
   const daysTo = iso => Math.round((new Date(iso + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
   const dayLabel = iso => { const d = daysTo(iso); return d <= 0 ? "今日" : (d === 1 ? "明日" : d + " 天後"); };
   const buyLabel = iso => { const d = daysTo(iso); return d < 0 ? `<span class="down">已過</span>` : (d === 0 ? `<span class="up">今日截止</span>` : (d === 1 ? "明日" : d + " 天後")); };

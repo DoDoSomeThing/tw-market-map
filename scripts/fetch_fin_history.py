@@ -161,19 +161,22 @@ def main() -> int:
         print("[OK ] history_fin 無待抓季度")
         return 0
 
-    failed = []
+    # 真缺口 vs 例行噪音：todo 同時含「從未抓到的季度」和「最近 2 季例行重抓」。
+    # 後者本來就有檔，來源掛掉（MOPS WAF 擋雲端 IP）只是少補幾家新公布的，
+    # 不該讓 pipeline 報失敗 → 否則每次 WAF 都開一張沒東西可修的 issue。
+    missing_hard, failed_soft = [], []
     for y, s in todo:
+        p = FIN_DIR / f"{y}Q{s}.json"
         try:
             q = fetch_quarter(y, s)
         except Exception as e:                      # noqa: BLE001 — 單季失敗不擋其他季
             print(f"[ERR] {y}Q{s}: {type(e).__name__} {str(e)[:150]}")
-            failed.append(f"{y}Q{s}")
+            (failed_soft if p.exists() else missing_hard).append(f"{y}Q{s}")
             continue
         if q["n"] == 0:
             print(f"[SKIP] {y}Q{s}: 無資料（尚未公布）")
             continue
         # 不讓殘缺蓋掉完整：家數比既有檔少一成以上就跳過（公布期內只會越來越多）
-        p = FIN_DIR / f"{y}Q{s}.json"
         if p.exists():
             old_n = json.loads(p.read_text(encoding="utf-8")).get("n", 0)
             if q["n"] < old_n * 0.9:
@@ -181,8 +184,10 @@ def main() -> int:
                 continue
         save(q)
 
-    if failed:
-        print(f"[WARN] 失敗季度: {failed}")
+    if failed_soft:
+        print(f"[WARN] 重抓失敗但已有存檔（不算缺口）: {failed_soft}")
+    if missing_hard:
+        print(f"[ERR ] 從未抓到的季度: {missing_hard}")
         return 1
     return 0
 
