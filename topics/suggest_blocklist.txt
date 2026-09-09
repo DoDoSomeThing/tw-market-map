@@ -88,3 +88,15 @@
 匯率
 油價
 金價
+
+# 已人工忽略的泛詞（Issues #13–#16）
+SEMICON
+TAIWAN
+加速
+劉揚偉
+擴產
+WITH
+需求
+永清
+大增
+GOOGLE
