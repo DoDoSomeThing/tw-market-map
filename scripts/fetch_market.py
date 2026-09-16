@@ -19,6 +19,7 @@ def _yi(v):
 
 BFI82U_URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json"
 MARGN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?selectType=MS&response=json"
+MARGN_URL_DATED = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d}&selectType=MS&response=json"
 TPEX_INST_URL = "https://www.tpex.org.tw/www/zh-tw/insti/summary?type=Daily&date={d}&response=json"
 
 # BFI82U 單位名稱 → 標準 key
@@ -89,11 +90,22 @@ def fetch_tpex_inst() -> dict | None:
     return None
 
 
-def fetch_margin() -> dict | None:
+def fetch_margin(target_ymd: str | None = None) -> dict | None:
     """信用交易統計（上市整體）。TWSE 註明餘額以「前日餘額」為準。
-    rwd 端點對 GitHub Actions 偶爾很慢（2026-07-08 三次 30s 全逾時）→ timeout 拉 60。"""
-    j = http_get_json(MARGN_URL, timeout=60)
-    if j.get("stat") != "OK":
+    rwd 端點對 GitHub Actions 偶爾很慢（2026-07-08 三次 30s 全逾時）→ timeout 拉 60。
+
+    2026-09-16：不帶 date= 時 TWSE 回「它手上最新的一份」，排程跑得比公布時間早就會拿到
+    前一交易日，而 stat 仍是 OK → 流程不算失敗，面板卻顯示舊日期並寫「抓取失敗」（誤報）。
+    改成先指定交易日；那天還沒出才退回不帶日期的最新版（此時是「來源尚未公布」）。
+    """
+    j = None
+    if target_ymd:
+        j = http_get_json(MARGN_URL_DATED.format(d=target_ymd), timeout=60)
+        if not j or j.get("stat") != "OK":
+            j = None
+    if j is None:
+        j = http_get_json(MARGN_URL, timeout=60)
+    if not j or j.get("stat") != "OK":
         return None
     table = None
     for t in j.get("tables", []):
@@ -149,12 +161,20 @@ def main() -> None:
         tpex = None
         tpex_err = str(e)
 
+    # 資券對齊法人的交易日（不指定日期時 TWSE 會回它手上最新的一份，可能是前一日）
+    target_ymd = ((twse or {}).get("date") or "").replace("-", "") or None
     try:
-        margin = fetch_margin()
+        margin = fetch_margin(target_ymd)
         margin_err = None if margin else "MI_MARGN 無信用交易統計表"
     except Exception as e:
         margin = None
         margin_err = str(e)
+    else:
+        # 抓到了但不是目標交易日 → 來源尚未公布，不是抓取失敗（render 靠 stale_reason 分流字樣）
+        if margin and target_ymd and margin.get("date") \
+                and margin["date"].replace("-", "") != target_ymd:
+            margin = margin | {"stale_reason": "not_published"}
+            margin_err = f"來源尚未公布 {(twse or {}).get('date')}，顯示 {margin['date']}"
 
     if margin is None:
         # 沿用前次資券（≤2 交易日），render 端用 margin.date 標舊資料日,不裝新鮮
@@ -162,7 +182,7 @@ def main() -> None:
         prev_margin = (prev.get("data") or {}).get("margin") if prev.get("ok") else None
         if prev_margin and data_age_days(prev_margin.get("date", "")) is not None \
                 and data_age_days(prev_margin["date"]) <= 2:
-            margin = prev_margin
+            margin = prev_margin | {"stale_reason": "fetch_failed"}
             margin_err = f"本次抓取失敗，沿用 {prev_margin['date']} 資料（{margin_err}）"
 
     if not twse and not margin:

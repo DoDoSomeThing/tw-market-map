@@ -7,6 +7,7 @@ from tw_common import (col_index, http_get_json, parse_num, read_json,
                        write_error, write_json, ymd_to_iso)
 
 MARGN_ALL_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?selectType=ALL&response=json"
+MARGN_ALL_URL_DATED = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d}&selectType=ALL&response=json"
 TOP = 30
 MIN_BAL = 500   # 今日餘額 ≥500 張才列，濾極小融資標的雜訊
 
@@ -43,7 +44,18 @@ def margin_cols(fields: list) -> dict | None:
 
 
 def main() -> None:
-    j = http_get_json(MARGN_ALL_URL, timeout=60)
+    # 先取目標交易日：不帶 date= 時 TWSE 回「它手上最新的一份」，排程比公布早跑就會
+    # 抓到前一交易日，而 stat 仍是 OK（不會被當成失敗）→ 面板靜靜顯示舊資料。
+    daily = read_json("daily_all")
+    target_ymd = (daily.get("data_date") or "").replace("-", "") or None
+
+    j = None
+    if target_ymd:
+        j = http_get_json(MARGN_ALL_URL_DATED.format(d=target_ymd), timeout=60)
+        if not j or j.get("stat") != "OK":
+            j = None
+    if j is None:
+        j = http_get_json(MARGN_ALL_URL, timeout=60)
     if not j or j.get("stat") != "OK":
         write_error("margin", "TWSE MI_MARGN ALL", f"回應非 OK: {(j or {}).get('stat')}")
         return
@@ -67,7 +79,6 @@ def main() -> None:
     i_short = cols.pop("券今日餘額", None)
     need = max([*cols.values(), i_short if i_short is not None else 0])
 
-    daily = read_json("daily_all")
     meta = {}
     if daily.get("ok"):
         for s in daily["data"].get("stocks", []):
