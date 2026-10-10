@@ -99,6 +99,26 @@ def signature(terms: list[str]) -> str:
     return "|".join(sorted(terms[:3]))
 
 
+def already_suggested(terms: list[str], already: set[str]) -> bool:
+    """這個題材提醒過了嗎?
+
+    2026-09-16:原本是 signature 完全比對,但詞群會隨新聞用字漂移 ——
+    蘋果摺疊機 09/10 以 `DUO|疊機|首款` 開了 Issue #18、09/11 又以 `DUO|疊機` 開 #19,
+    同一個題材兩張單。熱度撐越多天的題材漂得越兇,單也開得越多。
+    改成主詞重疊判定:重疊 ≥2 個,或一方是另一方的子集 → 視為同一題材。
+    (單主詞候選靠子集條件比對,不會被多主詞的舊簽章誤吃。)
+    """
+    t = set(terms[:3])
+    if not t:
+        return False
+    for sig in already:
+        s = set(sig.split("|"))
+        inter = t & s
+        if len(inter) >= 2 or inter == t or inter == s:
+            return True
+    return False
+
+
 def build() -> dict:
     td = read_json("topic_discover")
     if not td.get("ok"):
@@ -120,7 +140,7 @@ def build() -> dict:
         terms = c.get("terms", [])
         if not terms:
             continue
-        if signature(terms) in already:
+        if already_suggested(terms, already):
             continue
         if c.get("burst", 0) < MIN_BURST:
             continue
